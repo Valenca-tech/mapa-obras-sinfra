@@ -103,7 +103,7 @@ begin
   returning id into v_id;
   insert into public.orcamento_itens (orcamento_id, ordem, nivel, numero, codigo, fonte, descricao, unidade,
                                       quantidade, preco_unitario, total, tipo)
-  select v_id, n, x ->> 'nivel', x ->> 'numero', x ->> 'codigo', x ->> 'fonte', x ->> 'descricao', x ->> 'unidade',
+  select v_id, n * 10, x ->> 'nivel', x ->> 'numero', x ->> 'codigo', x ->> 'fonte', x ->> 'descricao', x ->> 'unidade',
          (x ->> 'quantidade')::numeric, (x ->> 'preco_unitario')::numeric, (x ->> 'total')::numeric,
          coalesce(x ->> 'tipo', 'servico')
     from jsonb_array_elements(p_itens) with ordinality as t(x, n);
@@ -222,7 +222,11 @@ $$;
 update public.configuracao
    set secretario_nome = 'Nome do Secretário (demonstração)';
 update public.obras
-   set fiscal_titulo = 'Engenheiro(a) Civil', fiscal_registro = 'CREA-MA 000000 (fictício)'
+   set fiscal_titulo = 'Engenheiro(a) Civil', fiscal_registro = 'CREA-MA nº 000000 (fictício)',
+       fiscal_matricula = '000000 (fictícia)'
  where demo and fiscal_responsavel is not null;
+update public.obras
+   set empresa_cnpj = '00.000.000/0001-00 (fictício)'
+ where demo and empresa is not null;
 
 commit;

@@ -1,52 +1,16 @@
 <script setup>
-import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue';
-import { useRouter } from 'vue-router';
-import { api } from '../api/index.js';
-import {
-  estado, pode, obrasComSituacao, abrirAcao, nomeTipo, nomeTipoDocumento, nomeTipoInstalacao, instalacaoPorId, avisar,
-} from '../estado.js';
+// Ficha lateral da obra (mapa, pendências). O detalhe completo (planilha de
+// serviços e documentos) fica na Central de Obras: botão "Abrir na Central".
+import { ref, nextTick, onMounted, onBeforeUnmount } from 'vue';
+import { estado, nomeTipo } from '../estado.js';
 import { fecharFicha } from '../rotas.js';
-import { segmentosDoTrecho, comprimentoTrecho, formatarExtensao } from '../lib/geo.js';
-import { calcularSituacao, textoSemAtualizacao } from '../lib/situacao.js';
-import { rotuloEvento, exigeDocumento } from '../lib/eventos.js';
-import { data, dataHora, reais, pct, haDias } from '../lib/formato.js';
-import SeloSituacao from './SeloSituacao.vue';
-import BarrasAvanco from './BarrasAvanco.vue';
+import { usarObra } from '../lib/usarObra.js';
+import ResumoObra from './ResumoObra.vue';
 
 const props = defineProps({ id: { type: String, required: true } });
-const roteador = useRouter();
 
-const obraForaDaLista = ref(null);
-const hist = ref({ atualizacoes: [], eventos: [] });
-const carregando = ref(true);
-const naoEncontrada = ref(false);
+const { obra, naoEncontrada } = usarObra(() => props.id);
 const botaoFechar = ref(null);
-
-const obra = computed(() => {
-  const daLista = obrasComSituacao.value.find((o) => o.id === props.id);
-  if (daLista) return daLista;
-  const o = obraForaDaLista.value;
-  return o
-    ? { ...o, situacao: calcularSituacao(o, { hoje: estado.hoje, tolerancia: estado.config.tolerancia_atraso_pontos, diasAlerta: estado.config.dias_sem_atualizacao_alerta }) }
-    : null;
-});
-
-async function carregar() {
-  carregando.value = true;
-  try {
-    if (!obrasComSituacao.value.some((o) => o.id === props.id)) {
-      obraForaDaLista.value = await api.obter(props.id);
-      naoEncontrada.value = !obraForaDaLista.value; // link antigo ou de outro ambiente
-    }
-    if (!naoEncontrada.value) hist.value = await api.historico(props.id);
-  } catch (e) {
-    avisar(e.message, 'erro');
-  } finally {
-    carregando.value = false;
-  }
-}
-onMounted(carregar);
-watch(() => estado.versao, carregar);
 
 const fechar = () => fecharFicha();
 
@@ -72,41 +36,6 @@ onBeforeUnmount(() => {
   consulta?.removeEventListener?.('change', aoMudarTela);
   if (focoAnterior?.isConnected && !estado.acao) focoAnterior.focus?.();
 });
-
-const linhaDoTempo = computed(() => {
-  const itens = [
-    ...hist.value.atualizacoes.map((a) => ({ chave: `a${a.id}`, tipo: 'lancamento', em: a.criado_em, a })),
-    ...hist.value.eventos.map((e) => ({
-      chave: `e${e.id}`,
-      tipo: 'evento',
-      em: e.criado_em,
-      e,
-      pendente: exigeDocumento(e.tipo) && (!e.documento || e.documento.pendente),
-    })),
-  ];
-  return itens.sort((x, y) => new Date(y.em) - new Date(x.em));
-});
-
-function descreverDocumento(d) {
-  if (!d) return '';
-  const partes = [nomeTipoDocumento(d.tipo)];
-  if (d.numero) partes.push(`nº ${d.numero}`);
-  if (d.numero_protocolo) partes.push(`protocolo ${d.numero_protocolo}${d.data_protocolo ? ` em ${data(d.data_protocolo)}` : ''}`);
-  return partes.join(' · ');
-}
-
-const trechoInfo = computed(() => {
-  const t = obra.value?.trecho;
-  if (!t) return '';
-  const n = segmentosDoTrecho(t).length;
-  return `${formatarExtensao(comprimentoTrecho(t))} em ${n} ${n === 1 ? 'segmento' : 'segmentos'}`;
-});
-const instalacao = computed(() => instalacaoPorId(obra.value?.instalacao_id));
-
-// Trocar de tela fecha a ficha (ela vive no ?obra= da tela atual); o "voltar"
-// do navegador reabre a ficha de onde saiu.
-const verInstalacao = () => roteador.push({ path: '/mapa', query: { instalacao: obra.value?.instalacao_id } });
-const editar = () => roteador.push(`/obras/${props.id}/editar`);
 </script>
 
 <template>
@@ -121,125 +50,18 @@ const editar = () => roteador.push(`/obras/${props.id}/editar`);
       </header>
 
       <p v-if="naoEncontrada" class="ficha__corpo mudo">
-        Esta obra não existe ou não está disponível para o seu usuário. Confira o endereço ou procure pela Lista.
+        Esta obra não existe ou não está disponível para o seu usuário. Confira o endereço ou procure na Central de Obras.
       </p>
 
       <div v-if="obra" class="ficha__corpo">
-        <div class="ficha__selos">
-          <SeloSituacao :situacao="obra.situacao" />
-          <span v-if="obra.situacao.motivoAtraso === 'prazo_vencido'" class="etiqueta etiqueta--pendencia">
-            Prazo vencido há {{ -obra.situacao.diasParaTermino }} dias
+        <RouterLink :to="`/obras/${obra.id}`" class="ficha__central">
+          <span>
+            <strong>Abrir na Central de Obras</strong>
+            <small>Serviços, etapas, valores e documentos (declarações, atestado, ficha técnica)</small>
           </span>
-          <span v-if="obra.prorrogada" class="etiqueta etiqueta--info">Prorrogada</span>
-          <span v-if="obra.pendencias_documentais > 0" class="etiqueta etiqueta--pendencia">
-            {{ obra.pendencias_documentais }} documento(s) pendente(s)
-          </span>
-          <span v-if="obra.arquivada" class="etiqueta etiqueta--alerta">Arquivada</span>
-          <span v-if="obra.demo" class="etiqueta etiqueta--demo">Fictícia</span>
-        </div>
-
-        <p v-if="obra.situacao.alertaSemAtualizacao" class="ficha__alerta">⚠ {{ textoSemAtualizacao(obra.situacao) }}.</p>
-        <p v-if="obra.paralisada" class="ficha__paralisada">
-          <strong>Paralisada desde {{ data(obra.paralisada_desde) }}.</strong> {{ obra.motivo_paralisacao }}
-        </p>
-
-        <BarrasAvanco :situacao="obra.situacao" />
-
-        <div v-if="!obra.arquivada" class="ficha__acoes">
-          <button v-if="pode('percentual.lancar')" class="btn btn--primario" @click="abrirAcao('lancar', obra)">
-            Lançar percentual
-          </button>
-          <!-- paralisação vale para obra em execução (não iniciada não paralisa) -->
-          <template v-if="pode('obra.paralisar')">
-            <button v-if="obra.paralisada" class="btn" @click="abrirAcao('retomar', obra)">Retomar</button>
-            <button v-else-if="estado.hoje >= obra.data_inicio" class="btn btn--alerta" @click="abrirAcao('paralisar', obra)">
-              Paralisar
-            </button>
-          </template>
-          <button v-if="pode('obra.editar')" class="btn" @click="editar">Editar</button>
-          <button v-if="pode('obra.aditivo')" class="btn" @click="abrirAcao('aditivo', obra)">Aditivo de prazo</button>
-          <button v-if="pode('obra.arquivar')" class="btn btn--perigo" @click="abrirAcao('arquivar', obra)">Arquivar</button>
-        </div>
-        <div v-else-if="pode('obra.arquivar')" class="ficha__acoes">
-          <button class="btn" @click="abrirAcao('desarquivar', obra)">Desarquivar</button>
-        </div>
-
-        <dl class="ficha__dados">
-          <div><dt>Empresa contratada</dt><dd>{{ obra.empresa || '—' }}</dd></div>
-          <div><dt>Contrato</dt><dd>{{ obra.numero_contrato || '—' }}</dd></div>
-          <div><dt>Processo administrativo</dt><dd>{{ obra.numero_processo || '—' }}</dd></div>
-          <div><dt>Valor do contrato</dt><dd class="num">{{ reais(obra.valor_contrato) || '—' }}</dd></div>
-          <div><dt>Início</dt><dd class="num">{{ data(obra.data_inicio) }}</dd></div>
-          <div>
-            <dt>Término previsto</dt>
-            <dd class="num">
-              {{ data(obra.data_termino_prevista) }}
-              <small v-if="obra.data_termino_original !== obra.data_termino_prevista" class="mudo">
-                <br />original: {{ data(obra.data_termino_original) }}
-              </small>
-            </dd>
-          </div>
-          <div><dt>Fiscal responsável</dt><dd>{{ obra.fiscal_responsavel || '—' }}</dd></div>
-          <div v-if="trechoInfo"><dt>Trecho de via</dt><dd>{{ trechoInfo }}</dd></div>
-          <div v-if="obra.instalacao_id" class="ficha__largo">
-            <dt>Instalação atendida</dt>
-            <dd>
-              <template v-if="instalacao">
-                <button class="btn btn--link ficha__vinculo" @click="verInstalacao">{{ instalacao.nome }}</button>
-                <small class="mudo"> · {{ nomeTipoInstalacao(instalacao.tipo) }}</small>
-              </template>
-              <template v-else>Instalação desativada</template>
-            </dd>
-          </div>
-          <div>
-            <dt>Última atualização</dt>
-            <dd>
-              <template v-if="obra.ultima_atualizacao_em">
-                {{ dataHora(obra.ultima_atualizacao_em) }}
-                <small class="mudo">({{ haDias(obra.situacao.diasDesdeLancamento) }})</small>
-              </template>
-              <template v-else>Nunca atualizada</template>
-            </dd>
-          </div>
-        </dl>
-
-        <section class="ficha__historico">
-          <h3>Histórico</h3>
-          <p v-if="carregando" class="mudo pequeno">Carregando…</p>
-          <ol v-else class="tempo">
-            <li v-for="i in linhaDoTempo" :key="i.chave" :class="['tempo__item', `tempo__item--${i.tipo === 'evento' ? i.e.tipo : 'lancamento'}`]">
-              <template v-if="i.tipo === 'lancamento'">
-                <p class="tempo__titulo">
-                  Lançamento: <span class="num">{{ i.a.percentual_anterior !== null ? `${pct(i.a.percentual_anterior)} → ` : '' }}<strong>{{ pct(i.a.percentual_executado) }}</strong></span>
-                  <span v-if="i.a.percentual_anterior !== null && Number(i.a.percentual_executado) < Number(i.a.percentual_anterior)" class="etiqueta etiqueta--alerta">redução</span>
-                </p>
-                <p v-if="i.a.observacao" class="tempo__texto">{{ i.a.observacao }}</p>
-                <p class="tempo__meta">{{ i.a.autor_nome }} · {{ dataHora(i.a.criado_em) }}</p>
-              </template>
-              <template v-else>
-                <p class="tempo__titulo">
-                  {{ rotuloEvento(i.e.tipo) }}
-                  <span v-if="i.e.data_evento" class="mudo num">em {{ data(i.e.data_evento) }}</span>
-                </p>
-                <p v-if="i.e.tipo === 'aditivo_prazo'" class="tempo__texto num">
-                  Término {{ data(i.e.dados.termino_anterior) }} → <strong>{{ data(i.e.dados.termino_novo) }}</strong>
-                </p>
-                <p v-if="i.e.tipo === 'retomada' && i.e.dados.dias_paralisada !== undefined" class="tempo__texto">
-                  Ficou {{ i.e.dados.dias_paralisada }} dias paralisada.
-                </p>
-                <p v-if="i.e.descricao && i.e.tipo !== 'cadastro'" class="tempo__texto">{{ i.e.descricao }}</p>
-                <p v-if="i.e.documento" class="tempo__doc">📄 {{ descreverDocumento(i.e.documento) }}</p>
-                <p v-if="i.pendente" class="tempo__pendente">
-                  <span class="etiqueta etiqueta--pendencia">Documento pendente</span>
-                  <button v-if="pode('documento.editar')" class="btn btn--link" @click="abrirAcao('documento', obra, i.e)">
-                    Completar documento
-                  </button>
-                </p>
-                <p class="tempo__meta">{{ i.e.autor_nome }} · {{ dataHora(i.e.criado_em) }}</p>
-              </template>
-            </li>
-          </ol>
-        </section>
+          <span aria-hidden="true">→</span>
+        </RouterLink>
+        <ResumoObra :obra="obra" />
       </div>
     </aside>
   </div>
@@ -320,124 +142,30 @@ const editar = () => roteador.push(`/obras/${props.id}/editar`);
   flex-direction: column;
   gap: 14px;
 }
-.ficha__selos {
+.ficha__central {
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
   align-items: center;
-}
-.ficha__alerta,
-.ficha__paralisada {
-  margin: 0;
-  padding: 8px 10px;
+  gap: 10px;
+  padding: 10px 12px;
   border-radius: var(--raio-p);
-  font-size: 0.9rem;
+  border: 1px solid var(--azul);
+  background: var(--azul-claro);
+  color: var(--azul-escuro, var(--azul));
+  text-decoration: none;
 }
-.ficha__alerta {
-  background: var(--alerta-fundo);
-  color: var(--alerta);
-  border: 1px solid #f0d89a;
+.ficha__central:hover {
+  background: #dce8f6;
 }
-.ficha__paralisada {
-  background: #fff3e8;
-  color: #8a3a00;
-  border: 1px solid #f0c39c;
-}
-.ficha__acoes {
+.ficha__central > span:first-child {
+  flex: 1;
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
+  flex-direction: column;
+  gap: 2px;
 }
-.ficha__dados {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px 14px;
-  margin: 0;
-  padding: 12px;
-  background: #f7f9fb;
-  border-radius: var(--raio-p);
-  border: 1px solid var(--borda);
-}
-.ficha__dados dt {
-  font-size: 0.75rem;
-  color: var(--texto-3);
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-}
-.ficha__largo {
-  grid-column: 1 / -1;
-}
-.ficha__vinculo {
-  padding: 0;
-  min-height: 0;
-  text-align: left;
-  white-space: normal;
-}
-.ficha__dados dd {
-  margin: 1px 0 0;
-  font-size: 0.92rem;
-  overflow-wrap: anywhere;
-}
-.ficha__historico h3 {
-  margin-bottom: 8px;
-}
-.tempo {
-  list-style: none;
-  margin: 0;
-  padding: 0 0 0 14px;
-  border-left: 2px solid var(--borda);
-}
-.tempo__item {
-  position: relative;
-  padding: 0 0 14px 12px;
-}
-.tempo__item::before {
-  content: '';
-  position: absolute;
-  left: -21px;
-  top: 4px;
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  background: var(--marcador, var(--azul));
-  border: 2px solid #fff;
-  box-shadow: 0 0 0 1px var(--borda);
-}
-.tempo__item--paralisacao { --marcador: var(--s-paralisada); }
-.tempo__item--retomada { --marcador: var(--s-em-dia); }
-.tempo__item--aditivo_prazo { --marcador: var(--s-concluida); }
-.tempo__item--arquivamento { --marcador: var(--s-atrasada); }
-.tempo__item--cadastro { --marcador: var(--dourado); }
-.tempo__item--lancamento { --marcador: #8a94a6; }
-.tempo p {
-  margin: 0;
-}
-.tempo__titulo {
-  font-weight: 600;
-  font-size: 0.92rem;
-}
-.tempo__texto {
-  font-size: 0.88rem;
-  color: var(--texto);
-  margin-top: 2px !important;
-}
-.tempo__doc {
-  font-size: 0.82rem;
+.ficha__central small {
   color: var(--texto-2);
-  margin-top: 3px !important;
+  font-size: 0.8rem;
 }
-.tempo__pendente {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-top: 4px !important;
-}
-.tempo__meta {
-  font-size: 0.78rem;
-  color: var(--texto-3);
-  margin-top: 3px !important;
-}
-
 @media (max-width: 640px) {
   .ficha-fundo {
     inset: 0;
@@ -451,9 +179,6 @@ const editar = () => roteador.push(`/obras/${props.id}/editar`);
     height: 88dvh;
     border-left: none;
     border-radius: 14px 14px 0 0;
-  }
-  .ficha__dados {
-    grid-template-columns: 1fr;
   }
 }
 </style>

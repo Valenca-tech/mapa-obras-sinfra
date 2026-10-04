@@ -366,6 +366,7 @@ h3 { font-size: 1rem; }
 /* ---------------------------------------------------------------- tabelas */
 
 .tabela-rolagem {
+  position: relative; /* rótulo .oculto dentro da tabela não alarga a página */
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
   border: 1px solid var(--borda);

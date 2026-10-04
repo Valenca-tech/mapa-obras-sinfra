@@ -288,7 +288,7 @@ watch(
         </button>
         <div :class="['tela-mapa__filtros', filtrosAbertos && 'aberto']"><Filtros /></div>
         <div class="acoes tela-mapa__acoes">
-          <RouterLink to="/lista" class="btn">Ver em lista</RouterLink>
+          <RouterLink to="/central" class="btn">Central de Obras</RouterLink>
           <RouterLink to="/relatorio" class="btn">Imprimir relatório</RouterLink>
           <RouterLink v-if="pode('obra.cadastrar')" to="/obras/nova" class="btn btn--primario">+ Nova obra</RouterLink>
         </div>

@@ -90,3 +90,13 @@ test('etapa numerada como 1.0 fica no mesmo nível de 1', async () => {
   ]);
   assert.deepEqual(e.linhas.filter((x) => x.nivel === 'etapa').map((x) => x.subtotal), [15, 7]);
 });
+
+test('sem coluna de tipo: insumo do SINAPI e descrição com "insumo" viram material', () => {
+  const r = lerPlanilha([
+    ['ITEM', 'CÓDIGO', 'BANCO', 'DESCRIÇÃO', 'UND', 'QUANT.', 'PREÇO UNIT.', 'TOTAL'],
+    ['1.1', '92398', 'SINAPI', 'Piso intertravado', 'm2', 10, 100, 1000],
+    ['1.2', '00004718', 'SINAPI', 'Pedra britada n. 1', 'm3', 2, 100, 200],
+    ['1.3', 'C-10', 'Própria', 'Cimento (insumo)', 'sc', 5, 40, 200],
+  ]);
+  assert.deepEqual(r.itens.map((x) => x.tipo), ['servico', 'material', 'material']);
+});

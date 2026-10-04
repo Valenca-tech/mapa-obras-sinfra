@@ -105,6 +105,14 @@ function tipoDe(texto) {
   return null;
 }
 
+// Sem coluna de tipo: insumo do SINAPI (código com zeros à esquerda, como
+// 00004718) ou descrição com "insumo" vira material; o resto, serviço.
+function tipoPeloItem(descricao, codigo, fonte) {
+  if (/\binsumo\b/.test(normalizar(descricao))) return 'material';
+  if (/sinapi/i.test(fonte) && /^0\d{4,}$/.test(codigo)) return 'material';
+  return 'servico';
+}
+
 const arred2 = (v) => Math.round(v * 100) / 100;
 
 /**
@@ -170,7 +178,7 @@ export function interpretarLinhas(linhas, inicio, mapa) {
       quantidade,
       preco_unitario: preco,
       total,
-      tipo: tipoDe(col(linha, 'tipo')) ?? 'servico',
+      tipo: tipoDe(col(linha, 'tipo')) ?? tipoPeloItem(descricao, textoDe(col(linha, 'codigo')), textoDe(col(linha, 'fonte'))),
     });
   }
 

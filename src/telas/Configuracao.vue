@@ -1,5 +1,6 @@
 <script setup>
-// Somente o secretário: parâmetros da regra de situação e visão dos perfis.
+// Somente o secretário: parâmetros da regra de situação, dados do papel
+// timbrado e da assinatura dos documentos, e visão dos perfis.
 import { ref, onMounted } from 'vue';
 import { api, modoDemo } from '../api/index.js';
 import { estado, avisar, ROTULO_PAPEL, mensagemDeFalhaAoGravar } from '../estado.js';
@@ -9,6 +10,45 @@ const tolerancia = ref(pontos(estado.config.tolerancia_atraso_pontos));
 const dias = ref(String(estado.config.dias_sem_atualizacao_alerta));
 const erro = ref('');
 const erroCarga = ref('');
+
+// Papel timbrado e assinatura (documentos da Central de Obras).
+const CAMPOS_ORGAO = [
+  { campo: 'orgao_nome', rotulo: 'Nome do órgão', largo: true, obrigatorio: true },
+  { campo: 'orgao_sigla', rotulo: 'Sigla', ajuda: 'Vai no número dos documentos: Nº 001/2026-SINFRA.', obrigatorio: true },
+  { campo: 'prefeitura_cnpj', rotulo: 'CNPJ (do Município)' },
+  { campo: 'orgao_endereco', rotulo: 'Endereço', largo: true },
+  { campo: 'orgao_telefone', rotulo: 'Telefone' },
+  { campo: 'orgao_email', rotulo: 'E-mail' },
+];
+const CAMPOS_SECRETARIO = [
+  { campo: 'secretario_nome', rotulo: 'Nome do secretário', largo: true },
+  { campo: 'secretario_cargo', rotulo: 'Cargo', largo: true, obrigatorio: true },
+  { campo: 'secretario_ato', rotulo: 'Ato de nomeação', ajuda: 'Ex.: Portaria nº 12/2025-GAB (opcional).' },
+  { campo: 'secretario_matricula', rotulo: 'Matrícula' },
+];
+const textos = () => Object.fromEntries([...CAMPOS_ORGAO, ...CAMPOS_SECRETARIO].map((c) => [c.campo, estado.config[c.campo] ?? '']));
+const orgao = ref(textos());
+const erroOrgao = ref('');
+const salvandoOrgao = ref(false);
+
+async function salvarOrgao() {
+  if (salvandoOrgao.value) return;
+  erroOrgao.value = '';
+  const v = Object.fromEntries(Object.entries(orgao.value).map(([k, x]) => [k, String(x ?? '').trim() || null]));
+  const falta = [...CAMPOS_ORGAO, ...CAMPOS_SECRETARIO].find((c) => c.obrigatorio && !v[c.campo]);
+  if (falta) return (erroOrgao.value = `Preencha: ${falta.rotulo}.`);
+  salvandoOrgao.value = true;
+  try {
+    await api.salvarConfiguracao(v);
+    estado.config = await api.configuracao();
+    orgao.value = textos();
+    avisar('Dados do órgão e da assinatura salvos. Os próximos documentos já saem com eles.');
+  } catch (e) {
+    erroOrgao.value = mensagemDeFalhaAoGravar(e);
+  } finally {
+    salvandoOrgao.value = false;
+  }
+}
 const salvando = ref(false);
 const papeis = ref([]);
 const permissoes = ref([]);
@@ -78,6 +118,31 @@ const tem = (papel, permissao) => papel.codigo === 'secretario' || papel.permiss
       <div><button class="btn btn--primario" :disabled="salvando">{{ salvando ? 'Salvando…' : 'Salvar' }}</button></div>
     </form>
 
+    <form class="cartao config__form" @submit.prevent="salvarOrgao">
+      <h2>Papel timbrado e assinatura dos documentos</h2>
+      <p class="mudo pequeno">
+        Saem no cabeçalho, no rodapé e na assinatura das declarações, atestados, fichas técnicas e planilhas emitidas
+        pela Central de Obras. O fiscal de cada obra assina com o nome, título e registro cadastrados na obra.
+      </p>
+      <div class="grade">
+        <label v-for="c in CAMPOS_ORGAO" :key="c.campo" :class="['campo', c.largo && 'largo']">
+          <span>{{ c.rotulo }} <i v-if="c.obrigatorio" class="obrig">*</i></span>
+          <input v-model="orgao[c.campo]" type="text" maxlength="200" />
+          <small v-if="c.ajuda" class="ajuda">{{ c.ajuda }}</small>
+        </label>
+      </div>
+      <h3>Secretário</h3>
+      <div class="grade">
+        <label v-for="c in CAMPOS_SECRETARIO" :key="c.campo" :class="['campo', c.largo && 'largo']">
+          <span>{{ c.rotulo }} <i v-if="c.obrigatorio" class="obrig">*</i></span>
+          <input v-model="orgao[c.campo]" type="text" maxlength="200" />
+          <small v-if="c.ajuda" class="ajuda">{{ c.ajuda }}</small>
+        </label>
+      </div>
+      <p v-if="erroOrgao" class="caixa-erro" role="alert">{{ erroOrgao }}</p>
+      <div><button class="btn btn--primario" :disabled="salvandoOrgao">{{ salvandoOrgao ? 'Salvando…' : 'Salvar' }}</button></div>
+    </form>
+
     <p v-if="erroCarga" class="caixa-erro" role="alert">{{ erroCarga }}</p>
 
     <section class="cartao">
@@ -142,6 +207,11 @@ const tem = (papel, permissao) => papel.codigo === 'secretario' || papel.permiss
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+.config__form h2,
+.config__form h3,
+.config__form p {
+  margin: 0;
 }
 .centro {
   text-align: center !important;

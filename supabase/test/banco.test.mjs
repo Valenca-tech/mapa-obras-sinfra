@@ -560,7 +560,7 @@ test('gabinete importa a planilha; nova importação guarda a anterior; repetir 
   assert.equal(await importar(u.admin, { id: 'c0000000-0000-4000-8000-000000000001' }), primeira, 'repetição devolve a mesma');
   const { rows } = await db.query('select ordem, nivel, numero, tipo, total::float from orcamento_itens where orcamento_id = $1 order by ordem', [primeira]);
   assert.equal(rows.length, 5);
-  assert.deepEqual(rows[1], { ordem: 2, nivel: 'item', numero: '1.1', tipo: 'material', total: 2103 });
+  assert.deepEqual(rows[1], { ordem: 20, nivel: 'item', numero: '1.1', tipo: 'material', total: 2103 });
   assert.equal(rows[0].nivel, 'etapa');
 
   const segunda = await importar(u.admin, { descricao: 'Planilha do 1º aditivo' }, PLANILHA.slice(0, 3));

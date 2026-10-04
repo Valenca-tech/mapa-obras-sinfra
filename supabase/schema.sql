@@ -71,6 +71,7 @@ create table public.configuracao (
   secretario_nome              text,
   secretario_cargo             text not null default 'Secretário Municipal de Infraestrutura e Serviços Públicos',
   secretario_matricula         text,
+  secretario_ato               text, -- ato de nomeação (ex.: 'Portaria nº 12/2025-GAB')
   atualizado_em                timestamptz not null default now(),
   constraint configuracao_linha_unica check (id),
   constraint configuracao_tolerancia_valida check (tolerancia_atraso_pontos between 0 and 100),
@@ -150,6 +151,7 @@ create table public.obras (
   trecho                 jsonb,
   -- instalação pública atendida pela obra (reforma de escola, praça...)
   instalacao_id          uuid references public.instalacoes (id),
+  empresa_cnpj           text,
   fiscal_responsavel     text,
   -- para a assinatura do fiscal nas declarações (ex.: 'Engenheiro Civil', 'CREA-MA 1234567')
   fiscal_titulo          text,
@@ -387,7 +389,12 @@ insert into public.papel_permissoes (papel, permissao) values
   ('fiscal', 'documento.editar'),
   ('fiscal', 'documento.gerar');
 
-insert into public.configuracao default values;
+-- Dados públicos do órgão (site da Prefeitura, outubro de 2026). O CNPJ é o
+-- do Município (a SINFRA não tem CNPJ próprio). O secretário confere e
+-- completa (nome, matrícula, ato de nomeação) na tela Configuração.
+insert into public.configuracao (orgao_endereco, orgao_telefone, orgao_email, prefeitura_cnpj)
+values ('Rua Y, s/nº, Nova Imperatriz, CEP 65.907-180, Imperatriz-MA', '(99) 98453-1653',
+        'sinfra@imperatriz.ma.gov.br', '06.158.455/0001-16');
 
 -- Lista provisória, a confirmar com a SINFRA.
 insert into public.tipos_obra (codigo, nome, ordem) values
@@ -833,7 +840,7 @@ $$;
 -- 8.7 Ações expostas ao frontend (RPC).
 
 -- p_dados: {id (opcional, gerado no navegador), nome, tipo, bairro, empresa,
---           numero_processo, numero_contrato, valor_contrato, data_inicio,
+--           empresa_cnpj, numero_processo, numero_contrato, valor_contrato, data_inicio,
 --           data_termino_prevista, latitude, longitude, trecho (GeoJSON,
 --           opcional), instalacao_id (opcional), fiscal_responsavel,
 --           fiscal_titulo, fiscal_registro, fiscal_matricula}
@@ -877,7 +884,7 @@ begin
     raise exception 'O percentual inicial deve estar entre 0 e 100.' using errcode = 'P0001';
   end if;
 
-  insert into obras (id, nome, tipo, bairro, empresa, numero_processo, numero_contrato,
+  insert into obras (id, nome, tipo, bairro, empresa, empresa_cnpj, numero_processo, numero_contrato,
                      valor_contrato, data_inicio, data_termino_prevista, latitude,
                      longitude, trecho, instalacao_id, fiscal_responsavel, fiscal_titulo,
                      fiscal_registro, fiscal_matricula, criado_por)
@@ -886,6 +893,7 @@ begin
           coalesce(nullif(p_dados ->> 'tipo', ''), 'outro'),
           nullif(btrim(p_dados ->> 'bairro'), ''),
           nullif(btrim(p_dados ->> 'empresa'), ''),
+          nullif(btrim(p_dados ->> 'empresa_cnpj'), ''),
           nullif(btrim(p_dados ->> 'numero_processo'), ''),
           nullif(btrim(p_dados ->> 'numero_contrato'), ''),
           nullif(p_dados ->> 'valor_contrato', '')::numeric,
@@ -1199,7 +1207,8 @@ begin
   begin
     insert into orcamento_itens (orcamento_id, ordem, nivel, numero, codigo, fonte, descricao, unidade,
                                  quantidade, preco_unitario, total, tipo)
-    select v_id, n,
+    -- ordem de 10 em 10: um item novo entra entre dois sem renumerar a planilha
+    select v_id, n * 10,
            case when x ->> 'nivel' = 'etapa' then 'etapa' else 'item' end,
            nullif(btrim(x ->> 'numero'), ''),
            nullif(btrim(x ->> 'codigo'), ''),
@@ -1343,7 +1352,7 @@ grant select on public.papeis, public.permissoes, public.papel_permissoes,
   to authenticated;
 
 -- Escrita direta, coluna por coluna. O resto só pelas funções da seção 8.7.
-grant update (nome, tipo, bairro, empresa, numero_processo, numero_contrato, valor_contrato,
+grant update (nome, tipo, bairro, empresa, empresa_cnpj, numero_processo, numero_contrato, valor_contrato,
               data_inicio, data_termino_prevista, latitude, longitude, trecho, instalacao_id,
               fiscal_responsavel, fiscal_titulo, fiscal_registro, fiscal_matricula)
   on public.obras to authenticated;
@@ -1356,7 +1365,7 @@ grant update (nome, tipo, bairro, endereco, observacao, latitude, longitude, ati
 grant insert (id, obra_id, percentual_executado, observacao) on public.atualizacoes to authenticated;
 grant update (tolerancia_atraso_pontos, dias_sem_atualizacao_alerta, orgao_nome, orgao_sigla,
               orgao_endereco, orgao_telefone, orgao_email, prefeitura_cnpj, secretario_nome,
-              secretario_cargo, secretario_matricula)
+              secretario_cargo, secretario_matricula, secretario_ato)
   on public.configuracao to authenticated;
 -- Planilha de serviços: a importação é pela função; correções item a item, direto.
 grant update (descricao, data_base, bdi_percentual) on public.orcamentos to authenticated;

@@ -7,6 +7,11 @@ Marcas usadas pela ferramenta (sem o arquivo, a tela segue só com o texto).
                    Fica numa placa branca no cabeçalho e no rodapé.
   concretta.png    marca da Concretta Jr, colorida, para o rodapé (26 px de altura).
                    Ainda não fornecida: sem ela, o rodapé mostra o nome em texto.
+  brasao_imperatriz.png
+                   brasão do Município (262 x 320 px), no cabeçalho dos documentos
+                   emitidos pela Central de Obras (2 cm de altura). Baixado do site
+                   oficial (imperatriz.ma.gov.br/static/images/brasao.png) em
+                   04/10/2026. Lei Municipal 346/1985: símbolo oficial do Município.
 
 A marca da SINFRA não é imagem: é a palavra SINFRA em letra espessa (fonte
 Archivo Black, com Arial Black como reserva), definida em src/componentes/Marca.vue.

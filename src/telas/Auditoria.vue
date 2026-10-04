@@ -29,8 +29,12 @@ onMounted(async () => {
 const ROTULO_TABELA = {
   obras: 'Obra', atualizacoes: 'Lançamento', eventos_obra: 'Evento', documentos: 'Documento',
   perfis: 'Usuário', configuracao: 'Configuração', papel_permissoes: 'Permissão', instalacoes: 'Instalação',
+  orcamentos: 'Planilha de serviços', orcamento_itens: 'Item da planilha',
 };
-const ROTULO_OP = { INSERT: 'Inclusão', UPDATE: 'Alteração', DELETE: 'Exclusão', LIMPEZA_DEMO: 'Limpeza da demonstração' };
+const ROTULO_OP = {
+  INSERT: 'Inclusão', UPDATE: 'Alteração', DELETE: 'Exclusão', LIMPEZA_DEMO: 'Limpeza da demonstração',
+  IMPORTACAO: 'Importação',
+};
 const IGNORAR = ['atualizado_em', 'ultima_atualizacao_em'];
 
 const filtradas = computed(() => linhas.value.filter((l) => !tabela.value || l.tabela === tabela.value));
@@ -53,6 +57,11 @@ function resumo(l) {
       .filter(Boolean).join(' · ');
   }
   if (l.tabela === 'perfis') return `${d.nome} (${d.papel})`;
+  if (l.tabela === 'orcamentos') return d.descricao ?? '';
+  if (l.tabela === 'orcamento_itens') {
+    if (l.operacao === 'IMPORTACAO') return `${d.itens ?? '?'} itens e ${d.etapas ?? '?'} etapas importados`;
+    return `${d.numero ? `${d.numero} ` : ''}${d.descricao ?? ''}`;
+  }
   return '';
 }
 const mostrar = (v) => (v === null || v === undefined ? '∅' : typeof v === 'object' ? JSON.stringify(v) : String(v));

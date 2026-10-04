@@ -5,7 +5,7 @@
 
 /** Colunas da obra que o formulário de edição pode alterar (UPDATE direto). */
 export const CAMPOS_OBRA_EDITAVEIS = [
-  'nome', 'tipo', 'bairro', 'empresa', 'numero_processo', 'numero_contrato', 'valor_contrato',
+  'nome', 'tipo', 'bairro', 'empresa', 'empresa_cnpj', 'numero_processo', 'numero_contrato', 'valor_contrato',
   'data_inicio', 'data_termino_prevista', 'latitude', 'longitude', 'trecho', 'instalacao_id',
   'fiscal_responsavel', 'fiscal_titulo', 'fiscal_registro', 'fiscal_matricula',
 ];
@@ -14,6 +14,7 @@ export const CAMPOS_OBRA_EDITAVEIS = [
 export const CAMPOS_CONFIGURACAO = [
   'tolerancia_atraso_pontos', 'dias_sem_atualizacao_alerta', 'orgao_nome', 'orgao_sigla', 'orgao_endereco',
   'orgao_telefone', 'orgao_email', 'prefeitura_cnpj', 'secretario_nome', 'secretario_cargo', 'secretario_matricula',
+  'secretario_ato',
 ];
 
 /** Colunas de um item da planilha de serviços que se corrigem direto (UPDATE). */

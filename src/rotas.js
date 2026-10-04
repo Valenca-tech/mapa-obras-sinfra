@@ -5,6 +5,7 @@ import { estado, pode, sair } from './estado.js';
 import Entrar from './telas/Entrar.vue';
 import Mapa from './telas/Mapa.vue';
 import Lista from './telas/Lista.vue';
+import Obra from './telas/Obra.vue';
 import Atualizar from './telas/Atualizar.vue';
 import ObraFormulario from './telas/ObraFormulario.vue';
 import Relatorio from './telas/Relatorio.vue';
@@ -21,12 +22,14 @@ const routes = [
   { path: '/', redirect: () => telaInicial() },
   { path: '/entrar', component: Entrar, meta: { publica: true, limpa: true } },
   { path: '/mapa', component: Mapa, meta: { cheia: true } },
-  { path: '/lista', component: Lista },
+  { path: '/central', component: Lista },
+  { path: '/lista', redirect: '/central' }, // endereço antigo
   { path: '/atualizar', component: Atualizar, meta: { permissao: 'percentual.lancar' } },
   { path: '/pendencias', component: Pendencias },
   { path: '/instalacoes', component: Instalacoes },
   { path: '/obras/nova', component: ObraFormulario, meta: { permissao: 'obra.cadastrar' } },
   { path: '/obras/:id/editar', component: ObraFormulario, props: true, meta: { permissao: 'obra.editar' } },
+  { path: '/obras/:id', component: Obra, props: true },
   { path: '/relatorio', component: Relatorio, meta: { limpa: true } },
   { path: '/configuracao', component: Configuracao, meta: { permissao: 'configuracao.editar' } },
   { path: '/auditoria', component: Auditoria, meta: { permissao: 'auditoria.ver' } },

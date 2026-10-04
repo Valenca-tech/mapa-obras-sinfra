@@ -1,6 +1,6 @@
 # Mapa de Obras SINFRA (piloto)
 
-Ferramenta web para a Secretaria Municipal de Infraestrutura e Serviços Públicos de Imperatriz-MA: o gabinete cadastra as obras, o fiscal atualiza o percentual executado e o secretário vê no mapa, por cor e por texto, o que está em dia e o que está atrasado.
+Ferramenta web para a Secretaria Municipal de Infraestrutura e Serviços Públicos de Imperatriz-MA: o gabinete cadastra as obras, o fiscal atualiza o percentual executado e o secretário vê no mapa, por cor e por texto, o que está em dia e o que está atrasado. Por trás do mapa fica a **Central de Obras**: a planilha de serviços de cada contrato e a emissão de declarações, atestados, fichas técnicas e planilhas no papel timbrado da Prefeitura.
 
 Piloto desenvolvido pelo IFMA Campus Imperatriz (LAEST e Concretta Jr). Responsável: Prof. Luan Henrique Varão Silva.
 
@@ -9,7 +9,12 @@ Piloto desenvolvido pelo IFMA Campus Imperatriz (LAEST e Concretta Jr). Respons�
 - **Perfis:** `secretario` (acesso total, inclusive a permissões de módulos futuros), `admin` (gabinete: cadastra e mantém obras), `fiscal` (lança percentual, paralisa e retoma), `leitura` (consulta). As permissões ficam no banco e são impostas pela RLS, não só pela tela.
 - **Situação da obra** (calculada, nunca digitada; função única em `src/lib/situacao.js`), nesta ordem: executado 100% → Concluída; paralisada → Paralisada; antes do início → Não iniciada; prazo vencido → Atrasada; prazo decorrido menos executado acima da tolerância (padrão 10 pontos) → Atrasada; demais → Em dia. Alerta à parte de obra sem atualização (padrão 10 dias).
 - **Localização da obra:** um ponto (edificação, praça) ou um **trecho de via** desenhado no mapa, com uma ou mais ruas (pavimentação, drenagem, iluminação). O trecho é guardado em GeoJSON, a extensão é calculada e o pino fica no meio do segmento mais longo. No mapa, o trecho aparece na cor da situação; paralisada fica tracejada e não iniciada, pontilhada.
-- **Instalações públicas:** sede, pátio de máquinas, usina de asfalto, almoxarifado, escolas, unidades de saúde e praças aparecem no mapa como quadrados azul-escuros. O balão de cada uma lista as obras vinculadas a ela e as que estão a até 500 m. Gabinete e secretário cadastram e desativam (não se exclui).
+- **Instalações públicas:** 270 prédios e espaços do Município (secretarias, galpões, escolas, creches, UBS, hospitais, CAPS, CRAS, praças, mercados, cemitérios...) em 23 tipos agrupados por área, como quadrados azul-escuros com ícone do tipo. O botão "Instalações públicas" no mapa abre uma caixa para ligar ou desligar cada tipo ou área inteira (ex.: só escolas, só UBS); na primeira abertura aparecem só administração e serviços urbanos, para os ícones não cobrirem as obras. O balão de cada uma lista as obras vinculadas a ela e as que estão a até 500 m. Gabinete e secretário cadastram e desativam (não se exclui).
+- **Central de Obras** (menu "Central de Obras"; na ficha do mapa, "Abrir na Central"): tabela das obras e página de cada obra com três abas:
+  - *Resumo e histórico:* situação, ações, dados do contrato e do fiscal, linha do tempo.
+  - *Serviços e etapas:* a planilha orçamentária do contrato importada do Excel (.xlsx, .xls, .ods ou .csv). A importação acha o cabeçalho e as colunas sozinha (a pessoa confere e corrige), prefere o preço com BDI, transforma títulos em etapas, usa as linhas de total só para conferir a soma e compara com o valor do contrato. Depois, cada item se corrige ou se tira da planilha (volta quando quiser); dá para acrescentar itens e etapas. Filtro de serviços, materiais e equipamentos. Nova importação guarda a anterior como versão antiga.
+  - *Documentos:* declaração de andamento, atestado de capacidade técnica, ficha técnica da obra e planilha de serviços e valores, em PDF e Word (a planilha também em Excel). Saem no papel timbrado (brasão, ESTADO DO MARANHÃO / PREFEITURA MUNICIPAL DE IMPERATRIZ / Secretaria; endereço, telefone, e-mail e CNPJ no rodapé), com número de controle por tipo e ano (Nº 001/2026-SINFRA), local e data por extenso, valores e percentuais por extenso e assinatura do secretário e do fiscal da obra (título e registro no CREA). Antes de emitir há uma prévia sem número. Cada emissão guarda o retrato do conteúdo: baixar de novo sai igual ao emitido.
+  - Dados do papel timbrado e da assinatura do secretário: tela Configuração. Título, registro e matrícula do fiscal e CNPJ da empresa: cadastro da obra.
 - **Rastreabilidade:** nada se apaga; autor e data vêm do banco; aditivo, paralisação, retomada e arquivamento apontam para um documento (número e protocolo) ou ficam como "documento pendente"; toda alteração vai para a auditoria. Documento só se completa: campo já registrado não se troca.
 - **Datas e números conferidos no banco:** anos de 2000 a 2099 (barra ano digitado com 2 ou 5 algarismos), paralisação não começa antes da obra nem antes da última retomada, ato e protocolo não podem ser futuros, percentual com no máximo 2 casas.
 - **Gravação segura em rede ruim:** cadastro de obra, de instalação e lançamento de percentual levam um identificador gerado no aparelho; repetir depois de a conexão cair não duplica. Percentuais digitados e não salvos ficam guardados no aparelho (rascunho por usuário) e a página avisa antes de fechar.
@@ -42,7 +47,7 @@ Na tela de entrada há um botão para cada perfil (senha `demo`).
 ```
 supabase/
   schema.sql          tabelas, gatilhos, funções, RLS e dados de referência
-  instalacoes_iniciais.sql  18 instalações públicas reais (OpenStreetMap, conferir)
+  instalacoes_iniciais.sql  270 prédios e espaços públicos reais, com a fonte de cada um (conferir)
   seed_demo.sql       10 obras fictícias (datas relativas ao dia da carga)
   limpar_demo.sql     remove a demonstração antes da carga real
   test/               testes do banco (PGlite + imitação do Auth do Supabase)
@@ -52,14 +57,18 @@ src/
   lib/geo.js          trecho (GeoJSON), extensão, ponto central, distâncias
   lib/mapa.js         mapa de fundo, pinos e ícones das instalações
   lib/eventos.js      tipos de evento da obra (rótulo, documento exigido)
+  lib/planilha.js     leitura da planilha orçamentária (cabeçalho, colunas, etapas, subtotais)
+  lib/extenso.js      valores, percentuais e datas por extenso; número oficial
+  lib/documentos/     conteúdo dos documentos (conteudo.js) e geração de PDF, Word e Excel (arquivos.js)
   api/                acesso a dados: supabase.js (produção) e demo.js (navegador),
                       com o mesmo contrato (campos.js e teste contrato.test.mjs)
-  telas/              Entrar, Mapa, Lista, Atualizar, ObraFormulario, Relatorio,
-                      Pendencias, Instalacoes, Configuracao, Auditoria
+  telas/              Entrar, Mapa, Lista (Central de Obras), Obra (página com abas),
+                      Atualizar, ObraFormulario, Relatorio, Pendencias, Instalacoes,
+                      Configuracao, Auditoria
   componentes/        ficha da obra, diálogos de ação, filtros, totais etc.
 public/
   config.example.js   modelo de configuração (o config.js real fica fora do git)
-  marcas/             logotipos (ver LEIAME.txt)
+  marcas/             logotipos e brasão do Município (ver LEIAME.txt)
 scripts/
   gerar_html_unico.mjs  gera o HTML único da demonstração
   gerar_config.mjs      gera o config.js na publicação (recusa chave privilegiada)
@@ -126,7 +135,7 @@ O Supabase concede, por padrão, todos os privilégios em tabelas novas aos pap�
 npm test
 ```
 
-Cobrem a regra de situação (os seis casos e as bordas), a formatação e a leitura de números no padrão brasileiro, as permissões de cada perfil (inclusive tentativas de burlar a interface direto no banco), os gatilhos, o aditivo, a paralisação com pendência documental, o documento que não se reescreve, as datas fora de faixa, a repetição de cadastro e de lançamento sem duplicar, o arquivamento, a auditoria, a limpeza da demonstração, a situação de cada obra do seed, o contrato entre `demo.js` e `supabase.js` e a recusa de chave privilegiada na publicação.
+Cobrem a regra de situação (os seis casos e as bordas), a leitura da planilha orçamentária, o texto dos quatro documentos (número, data e valores por extenso, assinaturas), a numeração dos documentos sem buraco nem repetição, a formatação e a leitura de números no padrão brasileiro, as permissões de cada perfil (inclusive tentativas de burlar a interface direto no banco), os gatilhos, o aditivo, a paralisação com pendência documental, o documento que não se reescreve, as datas fora de faixa, a repetição de cadastro e de lançamento sem duplicar, o arquivamento, a auditoria, a limpeza da demonstração, a situação de cada obra do seed, o contrato entre `demo.js` e `supabase.js` e a recusa de chave privilegiada na publicação.
 
 ## Critérios de aceite do escopo
 
@@ -141,6 +150,9 @@ Cobrem a regra de situação (os seis casos e as bordas), a formatação e a lei
 | 7 | README com o passo a passo | Este arquivo |
 
 ## Limitações conhecidas
+
+- Documentos: não existe manual oficial de papel timbrado do Município publicado. O modelo segue o padrão visto nos documentos da Prefeitura e da SINFRA (brasão, três linhas de cabeçalho, endereço e CNPJ no rodapé) e o Manual de Redação da Presidência da República (margens, data, assinatura). O gabinete deve conferir com um documento recente da SINFRA. O PDF usa a fonte Roboto (embutida); o Word usa Calibri. O texto pode ser ajustado no Word antes de assinar; o número de controle fica registrado no sistema.
+- Prédios públicos: localização de bases públicas (INEP, CNES, Censo SUAS, IBGE e OpenStreetMap), aproximada e com data. Ficaram de fora 6 escolas sem localização confiável e órgãos em prédios de terceiros; a lista está no cabeçalho de `instalacoes_iniciais.sql`. Pátio de máquinas, usina de asfalto e almoxarifado da SINFRA não constam em nenhuma base e devem ser cadastrados pela tela.
 
 - A regra de atraso usa prazo linear entre início e término. Obra real segue curva S, então no início ela tende a acusar atraso cedo. A tolerância (padrão 10 pontos, ajustável pelo secretário) compensa parte disso. O módulo de cronograma (M3) resolve.
 - O plano gratuito do Supabase pausa o projeto após cerca de 7 dias sem acesso.

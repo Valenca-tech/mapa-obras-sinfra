@@ -1,13 +1,18 @@
 <script setup>
+// Central de Obras: todas as obras ativas em tabela. Cada linha abre a página
+// da obra (resumo, serviços e etapas, documentos); o mapa continua sendo a
+// tela de entrada e a ficha lateral leva para cá.
 import { ref, computed, onMounted, watch } from 'vue';
+import { useRouter } from 'vue-router';
 import { api } from '../api/index.js';
-import { estado, pode, obrasFiltradas, recarregarObras, nomeTipo, avisar } from '../estado.js';
+import { pode, obrasFiltradas, recarregarObras, nomeTipo, avisar, estado } from '../estado.js';
 import { data, dataHora, pct, reais, haDias } from '../lib/formato.js';
 import { diaEmImperatriz } from '../lib/situacao.js';
 import Totais from '../componentes/Totais.vue';
 import Filtros from '../componentes/Filtros.vue';
 import SeloSituacao from '../componentes/SeloSituacao.vue';
 
+const roteador = useRouter();
 onMounted(() => recarregarObras().catch((e) => avisar(e.message, 'erro')));
 
 const COLUNAS = [
@@ -19,6 +24,7 @@ const COLUNAS = [
   { chave: 'termino', rotulo: 'Término', valor: (o) => o.data_termino_prevista },
   { chave: 'atualizacao', rotulo: 'Última atualização', valor: (o) => o.situacao.diasSemAtualizacao ?? 99999 },
   { chave: 'valor', rotulo: 'Valor', valor: (o) => Number(o.valor_contrato ?? -1), direita: true },
+  { chave: 'planilha', rotulo: 'Planilha', valor: (o) => (o.tem_planilha ? 1 : 0), classe: 'col-secundaria' },
 ];
 
 const ordem = ref({ chave: 'situacao', asc: true });
@@ -37,7 +43,7 @@ const linhas = computed(() => {
 });
 
 const seta = (chave) => (ordem.value.chave !== chave ? '' : ordem.value.asc ? '▲' : '▼');
-const abrir = (o) => (estado.obraAberta = o.id);
+const abrir = (o) => roteador.push(`/obras/${o.id}`);
 
 // ---------------------------------------------------------------- arquivadas
 
@@ -68,7 +74,10 @@ watch(() => estado.versao, carregarArquivadas); // desarquivou pela ficha
 <template>
   <div>
     <div class="barra-titulo">
-      <h1>Obras ativas</h1>
+      <div>
+        <h1>Central de Obras</h1>
+        <p class="mudo pequeno lista__sub">Obras ativas. Abra uma obra para ver serviços, etapas e valores e emitir documentos.</p>
+      </div>
       <div class="acoes">
         <RouterLink to="/mapa" class="btn">Ver no mapa</RouterLink>
         <RouterLink to="/relatorio" class="btn">Imprimir relatório</RouterLink>
@@ -120,6 +129,10 @@ watch(() => estado.versao, carregarArquivadas); // desarquivou pela ficha
               <span v-else class="mudo">nunca</span>
             </td>
             <td class="direita num">{{ reais(o.valor_contrato) || '—' }}</td>
+            <td class="col-secundaria">
+              <span v-if="o.tem_planilha" class="pequeno">✓ importada</span>
+              <span v-else class="mudo pequeno">—</span>
+            </td>
           </tr>
           <tr v-if="!linhas.length">
             <td :colspan="COLUNAS.length" class="mudo">Nenhuma obra com estes filtros.</td>
@@ -164,6 +177,9 @@ watch(() => estado.versao, carregarArquivadas); // desarquivou pela ficha
 </template>
 
 <style scoped>
+.lista__sub {
+  margin: 2px 0 0;
+}
 .lista__topo {
   display: flex;
   flex-direction: column;

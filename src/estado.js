@@ -6,16 +6,22 @@ import { calcularSituacao, hojeEmImperatriz } from './lib/situacao.js';
 import { semAcento } from './lib/texto.js';
 
 // Tipos de instalação pública escondidos no mapa (o resto aparece, inclusive
-// tipos novos). Guardado neste aparelho: é preferência de quem usa.
+// tipos novos). Guardado neste aparelho: é preferência de quem usa. Na
+// primeira vez (nada guardado), o mapa abre só com a área de administração e
+// serviços urbanos: as 270 escolas, UBS e praças cobririam as obras.
 const CHAVE_TIPOS_OCULTOS = 'mapa-obras-tipos-instalacao-ocultos';
+const GRUPO_VISIVEL_DE_INICIO = 'Administração e serviços urbanos';
 function lerTiposOcultos() {
   try {
-    const v = JSON.parse(localStorage.getItem(CHAVE_TIPOS_OCULTOS) || '[]');
-    return Array.isArray(v) ? v.filter((c) => typeof c === 'string') : [];
+    const bruto = localStorage.getItem(CHAVE_TIPOS_OCULTOS);
+    if (bruto === null) return null;
+    const v = JSON.parse(bruto);
+    return Array.isArray(v) ? v.filter((c) => typeof c === 'string') : null;
   } catch {
-    return [];
+    return null;
   }
 }
+let tiposOcultosDePadrao = lerTiposOcultos() === null;
 
 function filtrosVazios() {
   return { situacao: '', tipo: '', bairro: '', busca: '', pendencia: false, alerta: false };
@@ -33,7 +39,7 @@ export const estado = reactive({
   instalacoes: [], // instalações públicas ativas (camada do mapa)
   hoje: hojeEmImperatriz(),
   filtros: filtrosVazios(),
-  tiposInstalacaoOcultos: lerTiposOcultos(), // camada do mapa: tipos escondidos
+  tiposInstalacaoOcultos: lerTiposOcultos() ?? [], // camada do mapa: tipos escondidos
   obraAberta: null, // id da obra exibida na ficha
   acao: null, // { id, tipo, obra, evento } diálogo de ação aberto
   versao: 0, // incrementa a cada gravação, para as telas recarregarem
@@ -224,6 +230,10 @@ export async function carregarDados() {
   estado.tiposObra = tiposObra;
   estado.tiposDocumento = tiposDocumento;
   estado.tiposInstalacao = tiposInstalacao;
+  if (tiposOcultosDePadrao) {
+    tiposOcultosDePadrao = false;
+    estado.tiposInstalacaoOcultos = tiposInstalacao.filter((t) => t.grupo !== GRUPO_VISIVEL_DE_INICIO).map((t) => t.codigo);
+  }
   await Promise.all([recarregarObras(), recarregarInstalacoes()]);
 }
 

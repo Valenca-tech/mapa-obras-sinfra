@@ -77,5 +77,7 @@ export function sqlDeslocarDatas(dias) {
       data_protocolo = data_protocolo + ${n},
       data_documento = data_documento + ${n},
       criado_em = criado_em + ${i};
+    update public.orcamentos set criado_em = criado_em + ${i}
+     where obra_id in (select id from public.obras where demo);
     commit;`;
 }

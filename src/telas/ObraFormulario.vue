@@ -29,6 +29,7 @@ const sugestoesBairro = computed(() => [...new Set([...bairros.value, ...BAIRROS
 const f = ref({
   nome: '', tipo: '', bairro: '', empresa: '', numero_processo: '', numero_contrato: '', valor: '',
   data_inicio: '', data_termino_prevista: '', fiscal_responsavel: '',
+  empresa_cnpj: '', fiscal_titulo: '', fiscal_registro: '', fiscal_matricula: '',
 });
 const local = ref(null);
 const trecho = ref(null); // GeoJSON do trecho de via, ou null para obra pontual
@@ -69,6 +70,10 @@ onMounted(async () => {
     valor: o.valor_contrato != null ? String(o.valor_contrato).replace('.', ',') : '',
     data_inicio: o.data_inicio, data_termino_prevista: o.data_termino_prevista,
     fiscal_responsavel: o.fiscal_responsavel ?? '',
+    empresa_cnpj: o.empresa_cnpj ?? '',
+    fiscal_titulo: o.fiscal_titulo ?? '',
+    fiscal_registro: o.fiscal_registro ?? '',
+    fiscal_matricula: o.fiscal_matricula ?? '',
   };
   local.value = { latitude: o.latitude, longitude: o.longitude };
   trecho.value = o.trecho ?? null;
@@ -124,6 +129,10 @@ function dados() {
     trecho: trecho.value ?? null,
     instalacao_id: instalacaoId.value || null,
     fiscal_responsavel: v.fiscal_responsavel.trim() || null,
+    empresa_cnpj: v.empresa_cnpj.trim() || null,
+    fiscal_titulo: v.fiscal_titulo.trim() || null,
+    fiscal_registro: v.fiscal_registro.trim() || null,
+    fiscal_matricula: v.fiscal_matricula.trim() || null,
   };
 }
 
@@ -251,9 +260,28 @@ const marcarSujo = () => (sujo.value = true);
               <option v-for="b in sugestoesBairro" :key="b" :value="b" />
             </datalist>
           </label>
+        </div>
+      </section>
+
+      <section>
+        <h2>Fiscal da obra</h2>
+        <p class="mudo pequeno">Nome, título e registro saem na assinatura das declarações e do atestado.</p>
+        <div class="grade">
           <label class="campo">
-            <span>Fiscal responsável</span>
-            <input v-model="f.fiscal_responsavel" type="text" />
+            <span>Nome do fiscal</span>
+            <input v-model="f.fiscal_responsavel" type="text" maxlength="120" />
+          </label>
+          <label class="campo">
+            <span>Título profissional</span>
+            <input v-model="f.fiscal_titulo" type="text" maxlength="80" placeholder="Ex.: Engenheiro Civil" />
+          </label>
+          <label class="campo">
+            <span>Registro profissional</span>
+            <input v-model="f.fiscal_registro" type="text" maxlength="60" placeholder="Ex.: CREA-MA nº 123456" />
+          </label>
+          <label class="campo">
+            <span>Matrícula</span>
+            <input v-model="f.fiscal_matricula" type="text" maxlength="30" />
           </label>
         </div>
       </section>
@@ -261,9 +289,13 @@ const marcarSujo = () => (sujo.value = true);
       <section>
         <h2>Contrato</h2>
         <div class="grade">
-          <label class="campo largo">
+          <label class="campo">
             <span>Empresa contratada</span>
             <input v-model="f.empresa" type="text" />
+          </label>
+          <label class="campo">
+            <span>CNPJ da empresa</span>
+            <input v-model="f.empresa_cnpj" type="text" maxlength="30" placeholder="00.000.000/0000-00" />
           </label>
           <label class="campo">
             <span>Nº do processo administrativo</span>

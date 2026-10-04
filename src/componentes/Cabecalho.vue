@@ -43,7 +43,7 @@ watch(
 const principais = computed(() =>
   [
     { para: '/mapa', rotulo: 'Mapa' },
-    { para: '/lista', rotulo: 'Lista' },
+    { para: '/central', rotulo: 'Central de Obras' },
     { para: '/atualizar', rotulo: 'Atualizar', permissao: 'percentual.lancar' },
     { para: '/pendencias', rotulo: 'Pendências' },
     { para: '/instalacoes', rotulo: 'Instalações' },
