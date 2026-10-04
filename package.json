@@ -1,0 +1,31 @@
+{
+  "name": "mapa-obras-sinfra",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Mapa de Obras SINFRA (piloto) - IFMA Campus Imperatriz / Concretta Jr",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build && node scripts/gerar_banco_demo.mjs",
+    "preview": "vite preview --port 4173",
+    "demo": "npm run build && vite preview --port 4173 --open",
+    "test": "node --test \"**/*.test.mjs\"",
+    "html": "node scripts/gerar_html_unico.mjs"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^6.0.9",
+    "vite": "^8.3.2"
+  },
+  "dependencies": {
+    "@electric-sql/pglite": "^0.5.8",
+    "@maplibre/maplibre-gl-leaflet": "^0.1.4",
+    "@supabase/supabase-js": "^2.117.2",
+    "leaflet": "^1.9.4",
+    "maplibre-gl": "^6.11.2",
+    "vue": "^3.5.43",
+    "vue-router": "^5.3.1"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

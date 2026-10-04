@@ -1,0 +1,68 @@
+# Publica o site no GitHub Pages a cada envio para a branch main.
+#
+# Modo de operação, definido nas variáveis do repositório
+# (Settings > Secrets and variables > Actions > Variables):
+#   MODO = demo                                  -> modo demonstração
+#   SUPABASE_URL e SUPABASE_ANON_KEY preenchidas -> produção (Supabase)
+#   nenhuma das duas                             -> a publicação FALHA
+# A anon key é pública por natureza (quem protege os dados é a RLS).
+# NUNCA cadastre a service_role key aqui: scripts/gerar_config.mjs recusa
+# chave que não seja a pública.
+name: Publicar no GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  construir:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Testes
+        run: npm test
+
+      - name: Gerar public/config.js
+        env:
+          MODO: ${{ vars.MODO }}
+          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ vars.SUPABASE_ANON_KEY }}
+        run: node scripts/gerar_config.mjs
+
+      - name: Construir
+        run: npm run build
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  publicar:
+    needs: construir
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.publicacao.outputs.page_url }}
+    steps:
+      - id: publicacao
+        uses: actions/deploy-pages@v4

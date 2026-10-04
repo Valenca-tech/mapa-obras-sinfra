@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#1e388b" />
+    <meta name="description" content="Mapa de Obras SINFRA: acompanhamento das obras da Prefeitura de Imperatriz-MA." />
+    <title>Mapa de Obras SINFRA</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16 2C10.5 2 6 6.4 6 11.9 6 19.3 16 30 16 30s10-10.7 10-18.1C26 6.4 21.5 2 16 2z' fill='%231e388b'/%3E%3Ccircle cx='16' cy='12' r='4' fill='%23daa520'/%3E%3C/svg%3E" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <!-- Fontes sem travar a página: com rede lenta ou bloqueada, abre com a fonte do sistema e troca depois. -->
+    <link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Asap:wght@400;600;700;800&display=swap" rel="stylesheet" media="print" onload="this.media='all'" />
+    <noscript><link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Asap:wght@400;600;700;800&display=swap" rel="stylesheet" /></noscript>
+    <!-- Credenciais do Supabase (fora do repositório; na publicação, gerado por scripts/gerar_config.mjs).
+         Sem este arquivo, no computador de desenvolvimento: modo demonstração. -->
+    <script src="./config.js"></script>
+    <style>
+      .carregando-inicial {
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 14px;
+        font-family: Asap, system-ui, sans-serif;
+        color: #1e388b;
+        background: #f4f6f9;
+      }
+      .carregando-inicial i {
+        width: 36px;
+        height: 36px;
+        border: 4px solid #c4d0ee;
+        border-top-color: #1e388b;
+        border-radius: 50%;
+        animation: girar 0.9s linear infinite;
+      }
+      @keyframes girar {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app">
+      <div class="carregando-inicial"><i></i><strong>Mapa de Obras SINFRA</strong><span>Carregando…</span></div>
+    </div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

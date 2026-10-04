@@ -1,0 +1,120 @@
+import { watch } from 'vue';
+import { createRouter, createWebHashHistory } from 'vue-router';
+import { estado, pode, sair } from './estado.js';
+
+import Entrar from './telas/Entrar.vue';
+import Mapa from './telas/Mapa.vue';
+import Lista from './telas/Lista.vue';
+import Atualizar from './telas/Atualizar.vue';
+import ObraFormulario from './telas/ObraFormulario.vue';
+import Relatorio from './telas/Relatorio.vue';
+import Configuracao from './telas/Configuracao.vue';
+import Auditoria from './telas/Auditoria.vue';
+import Pendencias from './telas/Pendencias.vue';
+import Instalacoes from './telas/Instalacoes.vue';
+
+/** Tela inicial: o fiscal cai direto em Atualizar (se puder lançar). */
+export const telaInicial = () =>
+  estado.perfil?.papel === 'fiscal' && pode('percentual.lancar') ? '/atualizar' : '/mapa';
+
+const routes = [
+  { path: '/', redirect: () => telaInicial() },
+  { path: '/entrar', component: Entrar, meta: { publica: true, limpa: true } },
+  { path: '/mapa', component: Mapa, meta: { cheia: true } },
+  { path: '/lista', component: Lista },
+  { path: '/atualizar', component: Atualizar, meta: { permissao: 'percentual.lancar' } },
+  { path: '/pendencias', component: Pendencias },
+  { path: '/instalacoes', component: Instalacoes },
+  { path: '/obras/nova', component: ObraFormulario, meta: { permissao: 'obra.cadastrar' } },
+  { path: '/obras/:id/editar', component: ObraFormulario, props: true, meta: { permissao: 'obra.editar' } },
+  { path: '/relatorio', component: Relatorio, meta: { limpa: true } },
+  { path: '/configuracao', component: Configuracao, meta: { permissao: 'configuracao.editar' } },
+  { path: '/auditoria', component: Auditoria, meta: { permissao: 'auditoria.ver' } },
+  { path: '/:caminho(.*)*', redirect: '/' },
+];
+
+export const rotas = createRouter({
+  history: createWebHashHistory(),
+  routes,
+  // Topo da página só ao trocar de tela (abrir a ficha muda só o ?obra=);
+  // no "voltar", a posição em que estava.
+  scrollBehavior: (para, de, salva) => salva ?? (para.path !== de.path ? { top: 0 } : false),
+});
+
+rotas.beforeEach((para) => {
+  if (para.path === '/entrar' && estado.saindo) return true;
+  if (!para.meta.publica && !estado.sessao) return '/entrar';
+  if (para.path === '/entrar' && estado.sessao) return telaInicial();
+  if (para.meta.permissao && !pode(para.meta.permissao)) {
+    const inicial = telaInicial();
+    return para.path === inicial ? '/mapa' : inicial; // nunca redireciona para si mesma
+  }
+  return true;
+});
+
+/**
+ * "Sair": primeiro sai da tela (as telas com algo não salvo perguntam, com a
+ * sessão ainda ativa para poder salvar) e só então encerra a sessão.
+ */
+export async function sairDaConta() {
+  estado.saindo = true;
+  let falha;
+  try {
+    falha = await rotas.replace('/entrar');
+  } finally {
+    estado.saindo = false;
+  }
+  if (falha) return false; // a pessoa preferiu ficar e salvar
+  await sair();
+  return true;
+}
+
+// ---------------------------------------------------------------- ficha da obra na URL
+
+// A ficha aberta vira ?obra=<id> na URL: o "voltar" do celular fecha a ficha
+// em vez de trocar a tela de baixo, e o endereço abre a mesma obra.
+let fichaEmpurrada = null; // id da ficha cuja abertura criou entrada no histórico
+
+const obraDaUrl = () => {
+  const o = rotas.currentRoute.value.query.obra;
+  return typeof o === 'string' ? o : null;
+};
+
+watch(
+  () => estado.obraAberta,
+  (id) => {
+    const naUrl = obraDaUrl();
+    if (id === naUrl) return;
+    const query = { ...rotas.currentRoute.value.query };
+    if (id) {
+      query.obra = id;
+      if (naUrl) {
+        if (fichaEmpurrada === naUrl) fichaEmpurrada = id; // troca de obra na mesma entrada
+        rotas.replace({ query });
+      } else {
+        fichaEmpurrada = id;
+        rotas.push({ query });
+      }
+    } else if (naUrl) {
+      fichaEmpurrada = null;
+      delete query.obra;
+      rotas.replace({ query });
+    }
+  },
+);
+
+watch(obraDaUrl, (id) => {
+  if (!id) fichaEmpurrada = null;
+  if (id !== estado.obraAberta) estado.obraAberta = id;
+});
+
+/** Fecha a ficha pelo ×: volta no histórico quando a abertura criou uma entrada. */
+export function fecharFicha() {
+  const id = estado.obraAberta;
+  if (id && fichaEmpurrada === id && obraDaUrl() === id) {
+    fichaEmpurrada = null;
+    rotas.back(); // o watch acima fecha a ficha quando o ?obra= sai da URL
+  } else {
+    estado.obraAberta = null;
+  }
+}
