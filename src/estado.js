@@ -1,9 +1,21 @@
 // Estado compartilhado entre as telas.
-import { reactive, computed } from 'vue';
+import { reactive, computed, watch } from 'vue';
 import { api } from './api/index.js';
 import { ehErroDeRede } from './api/erros.js';
 import { calcularSituacao, hojeEmImperatriz } from './lib/situacao.js';
 import { semAcento } from './lib/texto.js';
+
+// Tipos de instalação pública escondidos no mapa (o resto aparece, inclusive
+// tipos novos). Guardado neste aparelho: é preferência de quem usa.
+const CHAVE_TIPOS_OCULTOS = 'mapa-obras-tipos-instalacao-ocultos';
+function lerTiposOcultos() {
+  try {
+    const v = JSON.parse(localStorage.getItem(CHAVE_TIPOS_OCULTOS) || '[]');
+    return Array.isArray(v) ? v.filter((c) => typeof c === 'string') : [];
+  } catch {
+    return [];
+  }
+}
 
 function filtrosVazios() {
   return { situacao: '', tipo: '', bairro: '', busca: '', pendencia: false, alerta: false };
@@ -21,7 +33,7 @@ export const estado = reactive({
   instalacoes: [], // instalações públicas ativas (camada do mapa)
   hoje: hojeEmImperatriz(),
   filtros: filtrosVazios(),
-  mostrarInstalacoes: true, // camada de instalações públicas ligada no mapa
+  tiposInstalacaoOcultos: lerTiposOcultos(), // camada do mapa: tipos escondidos
   obraAberta: null, // id da obra exibida na ficha
   acao: null, // { id, tipo, obra, evento } diálogo de ação aberto
   versao: 0, // incrementa a cada gravação, para as telas recarregarem
@@ -100,6 +112,29 @@ export const obrasComSituacao = computed(() =>
     }),
   })),
 );
+
+watch(
+  () => estado.tiposInstalacaoOcultos,
+  (v) => {
+    try {
+      localStorage.setItem(CHAVE_TIPOS_OCULTOS, JSON.stringify(v));
+    } catch {
+      /* sem storage: vale só enquanto a página estiver aberta */
+    }
+  },
+);
+
+/** Instalações públicas dos tipos escolhidos para aparecer no mapa. */
+export const instalacoesVisiveis = computed(() =>
+  estado.instalacoes.filter((i) => !estado.tiposInstalacaoOcultos.includes(i.tipo)),
+);
+
+/** Garante que um tipo de instalação apareça no mapa (ex.: link para uma escola). */
+export function mostrarTipoInstalacao(codigo) {
+  if (estado.tiposInstalacaoOcultos.includes(codigo)) {
+    estado.tiposInstalacaoOcultos = estado.tiposInstalacaoOcultos.filter((c) => c !== codigo);
+  }
+}
 
 /** Algum filtro ligado (o mapa e a lista mostram só parte das obras). */
 export const filtroAtivo = computed(() => {

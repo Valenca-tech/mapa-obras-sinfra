@@ -356,7 +356,7 @@ test('gabinete cadastra obra com trecho e desenha trecho em obra existente; fisc
 
 test('instalações: todos os ativos veem; só gabinete e secretário cadastram e editam', async () => {
   await como(db, u.leitura, async () => {
-    assert.equal(await umValor(db, 'select count(*)::int from instalacoes'), 18);
+    assert.equal(await umValor(db, 'select count(*)::int from instalacoes'), 270);
     const r = await db.query("update instalacoes set nome = 'X'");
     assert.equal(r.affectedRows, 0);
   });
@@ -378,7 +378,7 @@ test('instalações: todos os ativos veem; só gabinete e secretário cadastram 
 });
 
 test('obra pode ser vinculada a uma instalação pública', async () => {
-  const escola = await umValor(db, "select id from instalacoes where nome = 'Escola Municipal Sinopse'");
+  const escola = await umValor(db, "select id from instalacoes where nome = 'Escola Municipal Eliza Nunes'");
   const id = await como(db, u.admin, () =>
     umValor(db, 'select criar_obra($1::jsonb)', [JSON.stringify({
       nome: 'Reforma da cobertura', tipo: 'edificacao', data_inicio: '2026-09-01', data_termino_prevista: '2027-01-01',
@@ -536,6 +536,95 @@ test('funções do banco ignoram tabela temporária com o mesmo nome', async () 
       await db.query('drop table if exists pg_temp.perfis');
     }
   });
+});
+
+// ---------------------------------------------------------------- planilha de serviços
+
+const PLANILHA = [
+  { nivel: 'etapa', numero: '1', descricao: 'SERVIÇOS PRELIMINARES' },
+  { nivel: 'item', numero: '1.1', codigo: '4813', fonte: 'SINAPI', descricao: 'Placa de obra em chapa galvanizada', unidade: 'm2', quantidade: 6, preco_unitario: 350.5, total: 2103, tipo: 'material' },
+  { nivel: 'item', numero: '1.2', codigo: '99059', fonte: 'SINAPI', descricao: 'Locação de obra com gabarito', unidade: 'm', quantidade: 120.5, preco_unitario: 42.1, total: 5073.05 },
+  { nivel: 'etapa', numero: '2', descricao: 'PAVIMENTAÇÃO' },
+  { nivel: 'item', numero: '2.1', codigo: '95995', fonte: 'SINAPI', descricao: 'Execução de CBUQ, espessura 5 cm', unidade: 'm3', quantidade: 300, preco_unitario: 1500, total: 450000 },
+];
+
+test('gabinete importa a planilha; nova importação guarda a anterior; repetir com o mesmo id não duplica', async () => {
+  const id = obra['Santa Rita'];
+  const importar = (quem, dados, itens = PLANILHA) =>
+    como(db, quem, () => umValor(db, 'select importar_orcamento($1, $2::jsonb, $3::jsonb)', [id, JSON.stringify(dados), JSON.stringify(itens)]));
+
+  assert.match(await como(db, u.fiscal, () => erroDe(() => db.query('select importar_orcamento($1, $2::jsonb, $3::jsonb)', [id, '{}', JSON.stringify(PLANILHA)]))), /Sem permissão/);
+  const versoesAntes = await umValor(db, 'select count(*)::int from orcamentos where obra_id = $1', [id]); // a demonstração já traz uma
+
+  const primeira = await importar(u.admin, { id: 'c0000000-0000-4000-8000-000000000001', data_base: 'SINAPI 08/2026', bdi_percentual: 25, arquivo_origem: 'planilha.xlsx' });
+  assert.equal(await importar(u.admin, { id: 'c0000000-0000-4000-8000-000000000001' }), primeira, 'repetição devolve a mesma');
+  const { rows } = await db.query('select ordem, nivel, numero, tipo, total::float from orcamento_itens where orcamento_id = $1 order by ordem', [primeira]);
+  assert.equal(rows.length, 5);
+  assert.deepEqual(rows[1], { ordem: 2, nivel: 'item', numero: '1.1', tipo: 'material', total: 2103 });
+  assert.equal(rows[0].nivel, 'etapa');
+
+  const segunda = await importar(u.admin, { descricao: 'Planilha do 1º aditivo' }, PLANILHA.slice(0, 3));
+  const ativos = await db.query('select id from orcamentos where obra_id = $1 and ativo', [id]);
+  assert.deepEqual(ativos.rows.map((r) => r.id), [segunda]);
+  assert.equal(await umValor(db, 'select count(*)::int from orcamentos where obra_id = $1', [id]), versoesAntes + 2, 'as anteriores ficam guardadas');
+  assert.equal(await umValor(db, 'select tem_planilha from obras_painel where id = $1', [id]), true);
+
+  // auditoria: uma linha por importação, não uma por item
+  assert.equal(await umValor(db, "select count(*)::int from auditoria where operacao = 'IMPORTACAO' and registro_id = $1", [primeira]), 1);
+  assert.equal(await umValor(db, "select count(*)::int from auditoria where tabela = 'orcamento_itens' and operacao = 'INSERT'"), 0);
+
+  assert.match(
+    await como(db, u.admin, () => erroDe(() => db.query('select importar_orcamento($1, $2::jsonb, $3::jsonb)', [id, '{}', JSON.stringify([{ nivel: 'item', descricao: ' ' }])]))),
+    /linha 1 da planilha está sem descrição/,
+  );
+  assert.match(
+    await como(db, u.admin, () => erroDe(() => db.query('select importar_orcamento($1, $2::jsonb, $3::jsonb)', [id, '{}', JSON.stringify([{ descricao: 'X', quantidade: 'abc' }])]))),
+    /não é número/,
+  );
+});
+
+test('correção de item recalcula o total, fica na auditoria e só vale na planilha vigente', async () => {
+  const id = obra['Santa Rita'];
+  const vigente = await umValor(db, 'select id from orcamentos where obra_id = $1 and ativo', [id]);
+  const antiga = await umValor(db, 'select id from orcamentos where obra_id = $1 and not ativo', [id]);
+  const item = await umValor(db, "select id from orcamento_itens where orcamento_id = $1 and numero = '1.2'", [vigente]);
+  await como(db, u.admin, () => db.query('update orcamento_itens set quantidade = 100 where id = $1', [item]));
+  assert.equal(await umValor(db, 'select total::float from orcamento_itens where id = $1', [item]), 4210);
+  assert.equal(await umValor(db, "select count(*)::int from auditoria where tabela = 'orcamento_itens' and registro_id = $1", [item]), 1);
+
+  const itemAntigo = await umValor(db, 'select id from orcamento_itens where orcamento_id = $1 limit 1', [antiga]);
+  const r = await como(db, u.admin, () => db.query("update orcamento_itens set descricao = 'X' where id = $1", [itemAntigo]));
+  assert.equal(r.affectedRows, 0, 'planilha antiga não se altera');
+  const r2 = await como(db, u.fiscal, () => db.query("update orcamento_itens set descricao = 'X' where id = $1", [item]));
+  assert.equal(r2.affectedRows, 0, 'fiscal não corrige planilha');
+  await como(db, u.admin, () =>
+    db.query("insert into orcamento_itens (orcamento_id, ordem, descricao, quantidade, preco_unitario, total) values ($1, 99, 'Item novo', 2, 10, 20)", [vigente]),
+  );
+  assert.equal(await umValor(db, "select count(*)::int from orcamento_itens where orcamento_id = $1 and descricao = 'Item novo'", [vigente]), 1);
+});
+
+test('documento gerado recebe número sequencial por tipo e ano; repetir não gasta número', async () => {
+  const id = obra['Santa Rita'];
+  const registrar = (quem, docId, tipo) =>
+    como(db, quem, () => umValor(db, "select registrar_documento_gerado($1, $2, $3, '{\"x\":1}'::jsonb, 'PROT-1')", [docId, id, tipo]));
+  const a = await registrar(u.fiscal, 'd0000000-0000-4000-8000-000000000001', 'declaracao_andamento');
+  const b = await registrar(u.admin, 'd0000000-0000-4000-8000-000000000002', 'declaracao_andamento');
+  const c = await registrar(u.admin, 'd0000000-0000-4000-8000-000000000003', 'atestado_capacidade');
+  const repetido = await registrar(u.fiscal, 'd0000000-0000-4000-8000-000000000001', 'declaracao_andamento');
+  assert.deepEqual([a.numero, b.numero, c.numero, repetido.numero], [1, 2, 1, 1]);
+  assert.equal(a.ano, b.ano);
+  assert.equal(await umValor(db, 'select gerado_por_nome from documentos_gerados where id = $1', [a.id]), 'Fiscal Teste');
+  assert.match(await como(db, u.leitura, () => erroDe(() => registrar(u.leitura, 'd0000000-0000-4000-8000-000000000009', 'ficha_tecnica'))), /Sem permissão/);
+  assert.match(await como(db, u.secretario, () => erroDe(() => db.query('delete from documentos_gerados'))), /permission denied/);
+});
+
+test('secretário preenche os dados do órgão e da assinatura; gabinete não', async () => {
+  await como(db, u.secretario, () =>
+    db.query("update configuracao set secretario_nome = 'Fulano de Tal', orgao_endereco = 'Rua X, 1'"),
+  );
+  assert.equal(await umValor(db, 'select secretario_nome from configuracao'), 'Fulano de Tal');
+  const r = await como(db, u.admin, () => db.query("update configuracao set secretario_nome = 'Outro'"));
+  assert.equal(r.affectedRows, 0);
 });
 
 // ---------------------------------------------------------------- limpeza (por último)

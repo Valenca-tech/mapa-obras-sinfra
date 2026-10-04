@@ -2,7 +2,9 @@
 // Mesmo contrato que demo.js (o teste supabase/test/contrato.test.mjs confere).
 import { createClient } from '@supabase/supabase-js';
 import { mensagemDeErro, ehErroDeRede, ErroAcao, MSG_REDE, MSG_SESSAO } from './erros.js';
-import { CAMPOS_OBRA_EDITAVEIS, CAMPOS_INSTALACAO, filtrar, temDocumento, novoId } from './campos.js';
+import {
+  CAMPOS_OBRA_EDITAVEIS, CAMPOS_INSTALACAO, CAMPOS_CONFIGURACAO, CAMPOS_ITEM_ORCAMENTO, filtrar, temDocumento, novoId,
+} from './campos.js';
 
 // Chave fixa da sessão no localStorage: assim o "Sair" consegue apagá-la mesmo
 // quando a biblioteca não consegue (sem rede e com o token vencido).
@@ -231,14 +233,82 @@ export async function editarInstalacao(id, campos) {
 }
 
 export async function salvarConfiguracao(c) {
-  const r = await dados(
-    sb.from('configuracao')
-      .update({ tolerancia_atraso_pontos: c.tolerancia_atraso_pontos, dias_sem_atualizacao_alerta: c.dias_sem_atualizacao_alerta })
-      .eq('id', true)
-      .select('id'),
-  );
+  const valores = filtrar(c, CAMPOS_CONFIGURACAO);
+  if (!Object.keys(valores).length) return;
+  const r = await dados(sb.from('configuracao').update(valores).eq('id', true).select('id'));
   if (!r.length) throw new ErroAcao('Você não tem permissão para alterar a configuração.');
 }
+
+// ---------------------------------------------------------------- planilha de serviços
+
+// O PostgREST devolve no máximo 1.000 linhas por pedido: planilha grande vem em partes.
+async function todas(montar, tamanho = 1000) {
+  const linhas = [];
+  for (let de = 0; ; de += tamanho) {
+    const parte = await dados(montar().range(de, de + tamanho - 1));
+    linhas.push(...parte);
+    if (parte.length < tamanho) return linhas;
+  }
+}
+
+/** Planilha vigente da obra: { orcamento, itens } ou null. */
+export async function obterOrcamento(obraId) {
+  const orcamento = await dados(sb.from('orcamentos').select('*').eq('obra_id', obraId).eq('ativo', true).maybeSingle());
+  if (!orcamento) return null;
+  const itens = await todas(() => sb.from('orcamento_itens').select('*').eq('orcamento_id', orcamento.id).order('ordem'));
+  return { orcamento, itens };
+}
+
+/** Versões da planilha da obra (a vigente e as anteriores). */
+export const listarOrcamentos = (obraId) =>
+  dados(sb.from('orcamentos').select('*').eq('obra_id', obraId).order('criado_em', { ascending: false }));
+
+const CAMPOS_IMPORTACAO = ['nivel', 'numero', 'codigo', 'fonte', 'descricao', 'unidade', 'quantidade', 'preco_unitario', 'total', 'tipo'];
+
+/** Importa a planilha (vira a vigente). dadosPlanilha.id torna a importação repetível. */
+export const importarOrcamento = (obraId, dadosPlanilha, itens) =>
+  rpc('importar_orcamento', {
+    p_obra: obraId,
+    p_dados: { id: novoId(), ...dadosPlanilha },
+    p_itens: itens.map((x) => filtrar(x, CAMPOS_IMPORTACAO)),
+  });
+
+export async function editarOrcamento(id, campos) {
+  const valores = filtrar(campos, ['descricao', 'data_base', 'bdi_percentual']);
+  if (!Object.keys(valores).length) return;
+  const r = await dados(sb.from('orcamentos').update(valores).eq('id', id).select('id'));
+  if (!r.length) throw new ErroAcao('Esta planilha não pode mais ser alterada (é antiga ou a obra está arquivada).');
+}
+
+export async function editarItemOrcamento(id, campos) {
+  const valores = filtrar(campos, CAMPOS_ITEM_ORCAMENTO);
+  if (!Object.keys(valores).length) return null;
+  const r = await dados(sb.from('orcamento_itens').update(valores).eq('id', id).select('*'));
+  if (!r.length) throw new ErroAcao('Este item não pode ser alterado (planilha antiga, obra arquivada ou sem permissão).');
+  return r[0];
+}
+
+export async function adicionarItemOrcamento(orcamentoId, item) {
+  const linha = { id: novoId(), ...filtrar(item, ['id', ...CAMPOS_ITEM_ORCAMENTO.filter((c) => c !== 'removido')]), orcamento_id: orcamentoId };
+  const { error } = await sb.from('orcamento_itens').insert(linha);
+  if (error && !jaGravado(error, 'orcamento_itens')) await dados(Promise.resolve({ error }));
+  return linha.id;
+}
+
+// ---------------------------------------------------------------- documentos gerados
+
+const COLUNAS_DOCUMENTO = 'id, obra_id, tipo, ano, numero, numero_protocolo, gerado_por_nome, gerado_em';
+
+export const listarDocumentosGerados = (obraId) =>
+  dados(sb.from('documentos_gerados').select(COLUNAS_DOCUMENTO).eq('obra_id', obraId).order('gerado_em', { ascending: false }));
+
+export const obterDocumentoGerado = (id) => dados(sb.from('documentos_gerados').select('*').eq('id', id).maybeSingle());
+
+/** Registra a emissão e devolve { id, numero, ano }. id gerado no aparelho: repetir não gasta número. */
+export const registrarDocumentoGerado = ({ id, obraId, tipo, conteudo, protocolo }) =>
+  rpc('registrar_documento_gerado', {
+    p_id: id ?? novoId(), p_obra: obraId, p_tipo: tipo, p_dados: conteudo ?? {}, p_protocolo: protocolo || null,
+  });
 
 // Só fazem algo no modo demonstração; aqui existem para manter o mesmo contrato.
 export const usuariosDemo = [];

@@ -4,7 +4,7 @@ import { useRoute } from 'vue-router';
 import L from 'leaflet';
 import {
   estado, pode, obrasFiltradas, obrasComSituacao, recarregarObras, recarregarInstalacoes, nomeTipoInstalacao,
-  avisar, quantidadeDeFiltros, limparFiltros,
+  avisar, quantidadeDeFiltros, limparFiltros, instalacoesVisiveis, mostrarTipoInstalacao,
 } from '../estado.js';
 import { LISTA_SITUACOES } from '../lib/situacao.js';
 import { CENTRO_IMPERATRIZ, camadaBase, iconePino, iconeInstalacao, svgInstalacao, escapar } from '../lib/mapa.js';
@@ -14,6 +14,7 @@ import {
 import { pct } from '../lib/formato.js';
 import Totais from '../componentes/Totais.vue';
 import Filtros from '../componentes/Filtros.vue';
+import CamadaInstalacoes from '../componentes/CamadaInstalacoes.vue';
 
 // Traço da linha do trecho, além da cor: paralisada tracejada, não iniciada pontilhada.
 const TRACO = { paralisada: '12 9', nao_iniciada: '1 9' };
@@ -151,8 +152,7 @@ function desenharInstalacoes() {
   if (!mapa) return;
   camadaInstalacoes.clearLayers();
   marcadoresInstalacao.clear();
-  if (!estado.mostrarInstalacoes) return;
-  for (const i of estado.instalacoes) {
+  for (const i of instalacoesVisiveis.value) {
     const m = L.marker([i.latitude, i.longitude], {
       icon: iconeInstalacao(i.tipo),
       title: `${i.nome} (${nomeTipoInstalacao(i.tipo)})`,
@@ -167,6 +167,14 @@ function desenharInstalacoes() {
       .addTo(camadaInstalacoes);
     marcadoresInstalacao.set(i.id, m);
   }
+}
+
+// Instalação pedida no endereço (?instalacao=id) aparece mesmo se o tipo dela
+// estiver escondido no filtro da camada.
+function revelarInstalacaoDaRota() {
+  const id = rota.query.instalacao;
+  const i = id && estado.instalacoes.find((x) => x.id === String(id));
+  if (i) mostrarTipoInstalacao(i.tipo);
 }
 
 // Vindo da tela Instalações (?instalacao=id): centraliza e abre o balão.
@@ -217,7 +225,7 @@ onMounted(async () => {
   });
   observador.observe(el.value);
 
-  if (rota.query.instalacao) estado.mostrarInstalacoes = true;
+  revelarInstalacaoDaRota();
   desenharInstalacoes();
   desenharObras();
   try {
@@ -226,6 +234,7 @@ onMounted(async () => {
     avisar(e.message, 'erro'); // segue com o que já estava carregado
   }
   if (!mapa) return; // saiu da tela antes de a recarga terminar
+  revelarInstalacaoDaRota();
   desenharInstalacoes(); // já com a lista nova, antes de abrir o balão
   abrirInstalacaoDaRota();
   // Vindo do cadastro ou da edição com a ficha já aberta: leva o mapa até a obra.
@@ -241,13 +250,13 @@ onBeforeUnmount(() => {
 });
 
 watch(obrasFiltradas, desenharObras);
-watch(() => [estado.instalacoes, estado.mostrarInstalacoes], desenharInstalacoes);
+watch(instalacoesVisiveis, desenharInstalacoes);
 // Já no mapa e veio outro ?instalacao= (link da ficha): a tela não remonta.
 watch(
   () => rota.query.instalacao,
   (id) => {
     if (!id) return;
-    if (!estado.mostrarInstalacoes) estado.mostrarInstalacoes = true;
+    revelarInstalacaoDaRota();
     // espera a camada ser redesenhada antes de abrir o balão
     setTimeout(abrirInstalacaoDaRota);
   },
@@ -287,11 +296,7 @@ watch(
     </div>
     <div class="tela-mapa__mapa">
       <div ref="el" class="tela-mapa__leaflet" role="region" aria-label="Mapa das obras de Imperatriz"></div>
-      <label class="tela-mapa__camada" title="Escolas, praças, unidades de saúde e prédios da Prefeitura">
-        <input v-model="estado.mostrarInstalacoes" type="checkbox" />
-        <span class="instalacao instalacao--mini" aria-hidden="true" v-html="svgInstalacao('sede')"></span>
-        Instalações públicas <span class="mudo">({{ estado.instalacoes.length }})</span>
-      </label>
+      <CamadaInstalacoes class="tela-mapa__camada" />
       <p v-if="!obrasFiltradas.length" class="tela-mapa__vazio">Nenhuma obra com estes filtros.</p>
     </div>
   </div>
@@ -340,26 +345,12 @@ watch(
     right: 460px;
   }
 }
+/* controle da camada de instalações (o visual fica no CamadaInstalacoes.vue) */
 .tela-mapa__camada {
   position: absolute;
   top: 10px;
   right: 10px;
-  z-index: 500;
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  font-size: 0.86rem;
-  font-weight: 600;
-  white-space: nowrap;
-  cursor: pointer;
-  padding: 7px 10px;
-  background: rgba(255, 255, 255, 0.96);
-  border-radius: var(--raio-p);
-  box-shadow: var(--sombra);
-}
-.tela-mapa__camada input {
-  width: 18px;
-  height: 18px;
+  z-index: 600;
 }
 .tela-mapa__mapa {
   flex: 1;

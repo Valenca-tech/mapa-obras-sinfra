@@ -61,6 +61,16 @@ create table public.configuracao (
   id                           boolean primary key default true,
   tolerancia_atraso_pontos     numeric(5,2) not null default 10,
   dias_sem_atualizacao_alerta  integer not null default 10,
+  -- Papel timbrado e assinatura dos documentos gerados (o secretário mantém).
+  orgao_nome                   text not null default 'Secretaria Municipal de Infraestrutura e Serviços Públicos',
+  orgao_sigla                  text not null default 'SINFRA',
+  orgao_endereco               text,
+  orgao_telefone               text,
+  orgao_email                  text,
+  prefeitura_cnpj              text,
+  secretario_nome              text,
+  secretario_cargo             text not null default 'Secretário Municipal de Infraestrutura e Serviços Públicos',
+  secretario_matricula         text,
   atualizado_em                timestamptz not null default now(),
   constraint configuracao_linha_unica check (id),
   constraint configuracao_tolerancia_valida check (tolerancia_atraso_pontos between 0 and 100),
@@ -84,6 +94,7 @@ create table public.tipos_documento (
 create table public.tipos_instalacao (
   codigo  text primary key,
   nome    text not null,
+  grupo   text not null default 'Outros', -- área (Educação, Saúde...): organiza a escolha no mapa
   ordem   integer not null default 0,
   ativo   boolean not null default true
 );
@@ -140,6 +151,10 @@ create table public.obras (
   -- instalação pública atendida pela obra (reforma de escola, praça...)
   instalacao_id          uuid references public.instalacoes (id),
   fiscal_responsavel     text,
+  -- para a assinatura do fiscal nas declarações (ex.: 'Engenheiro Civil', 'CREA-MA 1234567')
+  fiscal_titulo          text,
+  fiscal_registro        text,
+  fiscal_matricula       text,
 
   -- mantidos pelo banco (gatilhos e funções); o usuário não edita
   percentual_executado   numeric(5,2) not null default 0,
@@ -198,6 +213,77 @@ create table public.documentos (
 );
 
 create index documentos_obra_idx on public.documentos (obra_id);
+
+-- ---------------------------------------------------------------------
+-- 4b. Planilha de serviços da obra (orçamento do contrato)
+--     Importada do Excel do contrato. Cada importação é uma versão nova; a
+--     anterior fica guardada (inativa). Etapas agrupam itens (serviços ou
+--     materiais), na ordem da planilha.
+-- ---------------------------------------------------------------------
+
+create table public.orcamentos (
+  id              uuid primary key default gen_random_uuid(),
+  obra_id         uuid not null references public.obras (id) on delete restrict,
+  descricao       text not null default 'Planilha orçamentária do contrato',
+  data_base       text,              -- referência de preços, ex.: 'SINAPI 03/2026 desonerado'
+  bdi_percentual  numeric(6,2),
+  arquivo_origem  text,              -- nome do arquivo importado
+  ativo           boolean not null default true,
+  criado_por      uuid default auth.uid() references public.perfis (id),
+  criado_em       timestamptz not null default now(),
+  constraint orcamentos_bdi_valido check (bdi_percentual is null or bdi_percentual between 0 and 100)
+);
+
+-- Uma planilha vigente por obra.
+create unique index orcamentos_um_ativo_por_obra on public.orcamentos (obra_id) where ativo;
+
+create table public.orcamento_itens (
+  id              uuid primary key default gen_random_uuid(),
+  orcamento_id    uuid not null references public.orcamentos (id) on delete restrict,
+  ordem           integer not null,
+  nivel           text not null default 'item',      -- 'etapa' (título) ou 'item'
+  numero          text,                              -- '1', '1.1', '1.1.2'
+  codigo          text,                              -- código na tabela de referência
+  fonte           text,                              -- SINAPI, SICRO, ORSE, próprio...
+  descricao       text not null,
+  unidade         text,
+  quantidade      numeric(16,4),
+  preco_unitario  numeric(16,2),
+  total           numeric(16,2),
+  tipo            text not null default 'servico',   -- servico, material, equipamento, outro
+  removido        boolean not null default false,    -- item tirado da planilha (não se apaga)
+  atualizado_em   timestamptz,
+  constraint orcamento_itens_nivel_valido check (nivel in ('etapa', 'item')),
+  constraint orcamento_itens_tipo_valido check (tipo in ('servico', 'material', 'equipamento', 'outro')),
+  constraint orcamento_itens_descricao_obrigatoria check (length(btrim(descricao)) > 0)
+);
+
+create index orcamento_itens_orcamento_idx on public.orcamento_itens (orcamento_id, ordem);
+
+-- ---------------------------------------------------------------------
+-- 4c. Documentos gerados pela ferramenta (declaração, atestado, ficha,
+--     planilha). Cada emissão recebe número de controle por tipo e ano e
+--     guarda o retrato do conteúdo emitido (para reemitir igual).
+-- ---------------------------------------------------------------------
+
+create table public.documentos_gerados (
+  id                uuid primary key default gen_random_uuid(),
+  obra_id           uuid not null references public.obras (id) on delete restrict,
+  tipo              text not null,
+  ano               integer not null,
+  numero            integer not null,
+  numero_protocolo  text,
+  dados             jsonb not null default '{}'::jsonb,
+  gerado_por        uuid default auth.uid() references public.perfis (id),
+  gerado_por_nome   text not null,
+  gerado_em         timestamptz not null default now(),
+  constraint documentos_gerados_tipo_valido check (tipo in (
+    'declaracao_andamento', 'atestado_capacidade', 'ficha_tecnica', 'planilha_servicos'
+  )),
+  constraint documentos_gerados_numero_unico unique (tipo, ano, numero)
+);
+
+create index documentos_gerados_obra_idx on public.documentos_gerados (obra_id, gerado_em desc);
 
 -- ---------------------------------------------------------------------
 -- 5. Histórico: lançamentos de percentual e eventos da obra
@@ -276,10 +362,12 @@ insert into public.permissoes (codigo, descricao) values
   ('obra.arquivar',        'Arquivar e desarquivar obra'),
   ('percentual.lancar',    'Lançar percentual executado'),
   ('documento.editar',     'Completar dados de documento de suporte'),
-  ('configuracao.editar',  'Alterar tolerância de atraso e prazo do alerta'),
+  ('configuracao.editar',  'Alterar a configuração (regra de situação, dados do órgão e do secretário)'),
   ('auditoria.ver',        'Consultar o registro de auditoria'),
   ('perfis.ver',           'Ver a lista de usuários'),
-  ('instalacao.editar',    'Cadastrar e editar instalações públicas');
+  ('instalacao.editar',    'Cadastrar e editar instalações públicas'),
+  ('orcamento.editar',     'Importar e corrigir a planilha de serviços da obra'),
+  ('documento.gerar',      'Gerar declaração, atestado, ficha técnica e planilha da obra');
 
 -- O secretário não precisa de linhas aqui: tem_permissao() libera tudo para ele.
 insert into public.papel_permissoes (papel, permissao) values
@@ -292,9 +380,12 @@ insert into public.papel_permissoes (papel, permissao) values
   ('admin',  'documento.editar'),
   ('admin',  'perfis.ver'),
   ('admin',  'instalacao.editar'),
+  ('admin',  'orcamento.editar'),
+  ('admin',  'documento.gerar'),
   ('fiscal', 'obra.paralisar'),
   ('fiscal', 'percentual.lancar'),
-  ('fiscal', 'documento.editar');
+  ('fiscal', 'documento.editar'),
+  ('fiscal', 'documento.gerar');
 
 insert into public.configuracao default values;
 
@@ -317,16 +408,32 @@ insert into public.tipos_documento (codigo, nome, ordem) values
   ('despacho',          'Despacho',              7),
   ('outro',             'Outro',                 99);
 
--- Instalações que costumam ter relação com a SINFRA. Lista provisória.
-insert into public.tipos_instalacao (codigo, nome, ordem) values
-  ('sede',          'Sede administrativa',            1),
-  ('patio',         'Pátio de máquinas e garagem',    2),
-  ('usina',         'Usina de asfalto',               3),
-  ('almoxarifado',  'Almoxarifado e depósito',        4),
-  ('escola',        'Escola e creche municipal',      5),
-  ('saude',         'Unidade de saúde',               6),
-  ('praca',         'Praça e espaço público',         7),
-  ('outra',         'Outra',                          99);
+-- Prédios e espaços públicos do Município, por área (grupo). Na camada do
+-- mapa cada tipo pode ser ligado ou desligado.
+insert into public.tipos_instalacao (codigo, nome, grupo, ordem) values
+  ('sede',           'Prefeitura e secretarias',                   'Administração e serviços urbanos', 1),
+  ('patio',          'Pátio de máquinas e garagem',                'Administração e serviços urbanos', 2),
+  ('usina',          'Usina de asfalto',                           'Administração e serviços urbanos', 3),
+  ('almoxarifado',   'Almoxarifado, depósito e galpão',            'Administração e serviços urbanos', 4),
+  ('escola',         'Escola municipal',                           'Educação',                         10),
+  ('creche',         'Creche e educação infantil',                 'Educação',                         11),
+  ('ubs',            'Unidade Básica de Saúde (UBS)',              'Saúde',                            20),
+  ('hospital',       'Hospital e UPA',                             'Saúde',                            21),
+  ('caps',           'CAPS (saúde mental)',                        'Saúde',                            22),
+  ('especialidades', 'Especialidades, reabilitação e diagnóstico', 'Saúde',                            23),
+  ('academia_saude', 'Academia da Saúde',                          'Saúde',                            24),
+  ('saude',          'Vigilância, gestão e apoio à saúde',         'Saúde',                            25),
+  ('cras',           'CRAS',                                       'Assistência social',               30),
+  ('creas',          'CREAS e Centro POP',                         'Assistência social',               31),
+  ('acolhimento',    'Acolhimento institucional',                  'Assistência social',               32),
+  ('assistencia',    'Convivência, Cadastro Único e outros',       'Assistência social',               33),
+  ('praca',          'Praça e parque',                             'Espaços públicos',                 40),
+  ('esporte',        'Esporte e lazer',                            'Espaços públicos',                 41),
+  ('cultura',        'Cultura',                                    'Espaços públicos',                 42),
+  ('mercado',        'Mercado e feira',                            'Espaços públicos',                 43),
+  ('cemiterio',      'Cemitério',                                  'Espaços públicos',                 44),
+  ('terminal',       'Terminal de transporte',                     'Espaços públicos',                 45),
+  ('outra',          'Outra',                                      'Outros',                           99);
 
 -- ---------------------------------------------------------------------
 -- 8. Funções e gatilhos
@@ -592,6 +699,31 @@ create trigger auditoria after insert or update or delete on public.papel_permis
   for each row execute function public.auditar();
 create trigger auditoria after insert or update or delete on public.instalacoes
   for each row execute function public.auditar();
+create trigger auditoria after insert or update or delete on public.orcamentos
+  for each row execute function public.auditar();
+create trigger auditoria after insert or update or delete on public.orcamento_itens
+  for each row execute function public.auditar();
+-- documentos_gerados não tem gatilho de auditoria: é somente inserção e a
+-- própria tabela já é o registro (quem gerou, quando e o conteúdo emitido).
+
+-- Item da planilha corrigido: data da alteração e total recalculado quando
+-- mudam quantidade ou preço (sem mexer no total, ele acompanha).
+create function public.orcamento_itens_antes_atualizar() returns trigger
+language plpgsql as $$
+begin
+  new.atualizado_em := now();
+  if new.nivel = 'item'
+     and (new.quantidade is distinct from old.quantidade or new.preco_unitario is distinct from old.preco_unitario)
+     and new.total is not distinct from old.total
+     and new.quantidade is not null and new.preco_unitario is not null then
+    new.total := round(new.quantidade * new.preco_unitario, 2);
+  end if;
+  return new;
+end;
+$$;
+
+create trigger orcamento_itens_alteracao before update on public.orcamento_itens
+  for each row execute function public.orcamento_itens_antes_atualizar();
 
 -- 8.6 Auxiliares internas das ações (não expostas ao frontend).
 
@@ -703,7 +835,8 @@ $$;
 -- p_dados: {id (opcional, gerado no navegador), nome, tipo, bairro, empresa,
 --           numero_processo, numero_contrato, valor_contrato, data_inicio,
 --           data_termino_prevista, latitude, longitude, trecho (GeoJSON,
---           opcional), instalacao_id (opcional), fiscal_responsavel}
+--           opcional), instalacao_id (opcional), fiscal_responsavel,
+--           fiscal_titulo, fiscal_registro, fiscal_matricula}
 -- p_percentual_inicial: para obra já em andamento no momento do cadastro.
 -- p_documento: ordem de serviço (opcional).
 create function public.criar_obra(p_dados jsonb,
@@ -746,7 +879,8 @@ begin
 
   insert into obras (id, nome, tipo, bairro, empresa, numero_processo, numero_contrato,
                      valor_contrato, data_inicio, data_termino_prevista, latitude,
-                     longitude, trecho, instalacao_id, fiscal_responsavel, criado_por)
+                     longitude, trecho, instalacao_id, fiscal_responsavel, fiscal_titulo,
+                     fiscal_registro, fiscal_matricula, criado_por)
   values (coalesce(v_id, gen_random_uuid()),
           btrim(p_dados ->> 'nome'),
           coalesce(nullif(p_dados ->> 'tipo', ''), 'outro'),
@@ -762,6 +896,9 @@ begin
           p_dados -> 'trecho',
           nullif(p_dados ->> 'instalacao_id', '')::uuid,
           nullif(btrim(p_dados ->> 'fiscal_responsavel'), ''),
+          nullif(btrim(p_dados ->> 'fiscal_titulo'), ''),
+          nullif(btrim(p_dados ->> 'fiscal_registro'), ''),
+          nullif(btrim(p_dados ->> 'fiscal_matricula'), ''),
           auth.uid())
   returning id into v_id;
 
@@ -1010,6 +1147,144 @@ begin
 end;
 $$;
 
+-- Importa a planilha de serviços da obra: vira a versão vigente e a anterior
+-- fica guardada (inativa). Tudo numa transação: ou entra inteira, ou nada.
+-- p_dados: {id (opcional, gerado no navegador), descricao, data_base,
+--           bdi_percentual, arquivo_origem}
+-- p_itens: [{nivel ('etapa'|'item'), numero, codigo, fonte, descricao, unidade,
+--            quantidade, preco_unitario, total, tipo}], na ordem da planilha.
+-- Os itens não entram um a um na auditoria (seriam milhares de linhas): a
+-- importação vira um registro só, com quantidade de itens e total.
+create function public.importar_orcamento(p_obra uuid, p_dados jsonb, p_itens jsonb)
+returns uuid
+language plpgsql security definer set search_path = public, pg_temp as $$
+declare
+  v_id     uuid;
+  v_linha  integer;
+  v_resumo jsonb;
+begin
+  perform _exigir('orcamento.editar');
+  perform _obra_para_acao(p_obra);
+
+  -- Repetição da mesma importação (resposta perdida na rede): devolve a já gravada.
+  v_id := nullif(p_dados ->> 'id', '')::uuid;
+  if v_id is not null and exists (
+       select 1 from orcamentos where id = v_id and obra_id = p_obra and criado_por = auth.uid()) then
+    return v_id;
+  end if;
+
+  if p_itens is null or jsonb_typeof(p_itens) <> 'array' or jsonb_array_length(p_itens) = 0 then
+    raise exception 'A planilha não tem itens.' using errcode = 'P0001';
+  end if;
+  if jsonb_array_length(p_itens) > 5000 then
+    raise exception 'A planilha tem linhas demais (máximo 5.000).' using errcode = 'P0001';
+  end if;
+  select min(n) into v_linha
+    from jsonb_array_elements(p_itens) with ordinality as t(x, n)
+   where nullif(btrim(x ->> 'descricao'), '') is null;
+  if v_linha is not null then
+    raise exception 'A linha % da planilha está sem descrição.', v_linha using errcode = 'P0001';
+  end if;
+
+  update orcamentos set ativo = false where obra_id = p_obra and ativo;
+  insert into orcamentos (id, obra_id, descricao, data_base, bdi_percentual, arquivo_origem)
+  values (coalesce(v_id, gen_random_uuid()), p_obra,
+          coalesce(nullif(btrim(p_dados ->> 'descricao'), ''), 'Planilha orçamentária do contrato'),
+          nullif(btrim(p_dados ->> 'data_base'), ''),
+          nullif(p_dados ->> 'bdi_percentual', '')::numeric,
+          nullif(btrim(p_dados ->> 'arquivo_origem'), ''))
+  returning id into v_id;
+
+  perform set_config('app.sem_auditoria', 'on', true);
+  begin
+    insert into orcamento_itens (orcamento_id, ordem, nivel, numero, codigo, fonte, descricao, unidade,
+                                 quantidade, preco_unitario, total, tipo)
+    select v_id, n,
+           case when x ->> 'nivel' = 'etapa' then 'etapa' else 'item' end,
+           nullif(btrim(x ->> 'numero'), ''),
+           nullif(btrim(x ->> 'codigo'), ''),
+           nullif(btrim(x ->> 'fonte'), ''),
+           btrim(x ->> 'descricao'),
+           nullif(btrim(x ->> 'unidade'), ''),
+           nullif(x ->> 'quantidade', '')::numeric,
+           nullif(x ->> 'preco_unitario', '')::numeric,
+           nullif(x ->> 'total', '')::numeric,
+           case when x ->> 'tipo' in ('servico', 'material', 'equipamento', 'outro') then x ->> 'tipo' else 'servico' end
+      from jsonb_array_elements(p_itens) with ordinality as t(x, n);
+  exception when invalid_text_representation or numeric_value_out_of_range then
+    raise exception 'A planilha tem quantidade, preço ou total que não é número (ou é grande demais).'
+      using errcode = 'P0001';
+  end;
+  perform set_config('app.sem_auditoria', '', true);
+
+  select jsonb_build_object(
+           'obra_id', p_obra,
+           'itens', count(*) filter (where nivel = 'item'),
+           'etapas', count(*) filter (where nivel = 'etapa'),
+           'total', coalesce(sum(total) filter (where nivel = 'item'), 0),
+           'arquivo', nullif(btrim(p_dados ->> 'arquivo_origem'), ''))
+    into v_resumo
+    from orcamento_itens where orcamento_id = v_id;
+  insert into auditoria (tabela, registro_id, operacao, usuario_id, depois)
+  values ('orcamento_itens', v_id::text, 'IMPORTACAO', auth.uid(), v_resumo);
+
+  return v_id;
+end;
+$$;
+
+-- Registra a emissão de um documento gerado e devolve o número de controle
+-- (sequencial por tipo e ano). p_dados é o retrato do conteúdo emitido.
+-- Vale também para obra arquivada (ex.: atestado de obra concluída).
+create function public.registrar_documento_gerado(p_id uuid, p_obra uuid, p_tipo text, p_dados jsonb,
+                                                  p_protocolo text default null)
+returns jsonb
+language plpgsql security definer set search_path = public, pg_temp as $$
+declare
+  v_ano    integer := extract(year from hoje())::integer;
+  v_numero integer;
+  v_id     uuid;
+  v_feito  documentos_gerados;
+begin
+  perform _exigir('documento.gerar');
+
+  -- Repetição da mesma emissão (resposta perdida na rede): devolve o número já dado.
+  select * into v_feito from documentos_gerados where id = p_id and gerado_por = auth.uid();
+  if found then
+    return jsonb_build_object('id', v_feito.id, 'numero', v_feito.numero, 'ano', v_feito.ano);
+  end if;
+
+  if not exists (select 1 from obras where id = p_obra) then
+    raise exception 'Obra não encontrada.' using errcode = 'P0002';
+  end if;
+  if p_tipo not in ('declaracao_andamento', 'atestado_capacidade', 'ficha_tecnica', 'planilha_servicos') then
+    raise exception 'Tipo de documento desconhecido.' using errcode = 'P0001';
+  end if;
+
+  -- Numeração sem buraco nem repetição, mesmo com duas emissões ao mesmo tempo.
+  perform pg_advisory_xact_lock(hashtext('documentos_gerados:' || p_tipo || ':' || v_ano));
+  select coalesce(max(numero), 0) + 1 into v_numero
+    from documentos_gerados where tipo = p_tipo and ano = v_ano;
+
+  insert into documentos_gerados (id, obra_id, tipo, ano, numero, numero_protocolo, dados, gerado_por, gerado_por_nome)
+  values (coalesce(p_id, gen_random_uuid()), p_obra, p_tipo, v_ano, v_numero,
+          nullif(btrim(p_protocolo), ''), coalesce(p_dados, '{}'::jsonb), auth.uid(),
+          coalesce((select nome from perfis where id = auth.uid()), 'Sistema'))
+  returning id into v_id;
+
+  return jsonb_build_object('id', v_id, 'numero', v_numero, 'ano', v_ano);
+end;
+$$;
+
+-- A planilha pode ser corrigida? (é a vigente e a obra não está arquivada)
+-- Usada nas regras de acesso dos itens.
+create function public.orcamento_editavel(p_orcamento uuid) returns boolean
+language sql stable security definer set search_path = public, pg_temp as $$
+  select exists (
+    select 1 from orcamentos o join obras ob on ob.id = o.obra_id
+     where o.id = p_orcamento and o.ativo and not ob.arquivada
+  );
+$$;
+
 -- ---------------------------------------------------------------------
 -- 9. Visões para o frontend
 -- ---------------------------------------------------------------------
@@ -1042,6 +1317,8 @@ select o.*,
        o.data_termino_prevista > o.data_termino_original                  as prorrogada,
        (select max(e.data_evento) from public.eventos_obra e
         where e.obra_id = o.id and e.tipo = 'retomada')                   as ultima_retomada,
+       exists (select 1 from public.orcamentos oc
+               where oc.obra_id = o.id and oc.ativo)                      as tem_planilha,
        (select count(*) from public.pendencias_documentais p
         where p.obra_id = o.id)                                           as pendencias_documentais
 from public.obras o;
@@ -1061,13 +1338,14 @@ grant select on public.papeis, public.permissoes, public.papel_permissoes,
                 public.instalacoes, public.configuracao,
                 public.perfis, public.obras, public.documentos, public.atualizacoes,
                 public.eventos_obra, public.auditoria,
+                public.orcamentos, public.orcamento_itens, public.documentos_gerados,
                 public.obras_painel, public.pendencias_documentais
   to authenticated;
 
 -- Escrita direta, coluna por coluna. O resto só pelas funções da seção 8.7.
 grant update (nome, tipo, bairro, empresa, numero_processo, numero_contrato, valor_contrato,
               data_inicio, data_termino_prevista, latitude, longitude, trecho, instalacao_id,
-              fiscal_responsavel)
+              fiscal_responsavel, fiscal_titulo, fiscal_registro, fiscal_matricula)
   on public.obras to authenticated;
 -- "id" no INSERT: gerado no navegador, para repetir sem duplicar quando a
 -- resposta se perde na rede (a 2ª tentativa esbarra na chave primária).
@@ -1076,8 +1354,18 @@ grant insert (id, nome, tipo, bairro, endereco, observacao, latitude, longitude,
 grant update (nome, tipo, bairro, endereco, observacao, latitude, longitude, ativa)
   on public.instalacoes to authenticated;
 grant insert (id, obra_id, percentual_executado, observacao) on public.atualizacoes to authenticated;
-grant update (tolerancia_atraso_pontos, dias_sem_atualizacao_alerta)
+grant update (tolerancia_atraso_pontos, dias_sem_atualizacao_alerta, orgao_nome, orgao_sigla,
+              orgao_endereco, orgao_telefone, orgao_email, prefeitura_cnpj, secretario_nome,
+              secretario_cargo, secretario_matricula)
   on public.configuracao to authenticated;
+-- Planilha de serviços: a importação é pela função; correções item a item, direto.
+grant update (descricao, data_base, bdi_percentual) on public.orcamentos to authenticated;
+grant insert (id, orcamento_id, ordem, nivel, numero, codigo, fonte, descricao, unidade, quantidade,
+              preco_unitario, total, tipo)
+  on public.orcamento_itens to authenticated;
+grant update (ordem, nivel, numero, codigo, fonte, descricao, unidade, quantidade, preco_unitario,
+              total, tipo, removido)
+  on public.orcamento_itens to authenticated;
 
 -- Funções chamáveis pelo frontend
 grant execute on function
@@ -1091,7 +1379,10 @@ grant execute on function
   public.retomar_obra(uuid, text, jsonb, date),
   public.arquivar_obra(uuid, text, jsonb),
   public.desarquivar_obra(uuid, text, jsonb),
-  public.completar_documento(uuid, jsonb)
+  public.completar_documento(uuid, jsonb),
+  public.importar_orcamento(uuid, jsonb, jsonb),
+  public.registrar_documento_gerado(uuid, uuid, text, jsonb, text),
+  public.orcamento_editavel(uuid)
   to authenticated;
 
 alter table public.papeis            enable row level security;
@@ -1108,6 +1399,9 @@ alter table public.documentos        enable row level security;
 alter table public.atualizacoes      enable row level security;
 alter table public.eventos_obra      enable row level security;
 alter table public.auditoria         enable row level security;
+alter table public.orcamentos        enable row level security;
+alter table public.orcamento_itens   enable row level security;
+alter table public.documentos_gerados enable row level security;
 
 -- Tabelas de referência: qualquer usuário ativo lê.
 create policy leitura on public.papeis           for select to authenticated using (public.usuario_ativo());
@@ -1150,6 +1444,22 @@ create policy leitura on public.eventos_obra for select to authenticated using (
 create policy leitura on public.atualizacoes for select to authenticated using (public.usuario_ativo());
 create policy lancamento on public.atualizacoes for insert to authenticated
   with check (public.tem_permissao('percentual.lancar') and autor_id = auth.uid());
+
+-- Planilha de serviços: todos os ativos leem; correção com orcamento.editar,
+-- só na planilha vigente de obra não arquivada.
+create policy leitura on public.orcamentos for select to authenticated using (public.usuario_ativo());
+create policy alteracao on public.orcamentos for update to authenticated
+  using (public.tem_permissao('orcamento.editar') and public.orcamento_editavel(id))
+  with check (public.tem_permissao('orcamento.editar'));
+create policy leitura on public.orcamento_itens for select to authenticated using (public.usuario_ativo());
+create policy insercao on public.orcamento_itens for insert to authenticated
+  with check (public.tem_permissao('orcamento.editar') and public.orcamento_editavel(orcamento_id));
+create policy alteracao on public.orcamento_itens for update to authenticated
+  using (public.tem_permissao('orcamento.editar') and public.orcamento_editavel(orcamento_id))
+  with check (public.tem_permissao('orcamento.editar') and public.orcamento_editavel(orcamento_id));
+
+-- Documentos gerados: todos os ativos consultam; emissão só pela função.
+create policy leitura on public.documentos_gerados for select to authenticated using (public.usuario_ativo());
 
 -- Auditoria: só quem tem auditoria.ver (o secretário).
 create policy leitura on public.auditoria for select to authenticated

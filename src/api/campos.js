@@ -7,7 +7,19 @@
 export const CAMPOS_OBRA_EDITAVEIS = [
   'nome', 'tipo', 'bairro', 'empresa', 'numero_processo', 'numero_contrato', 'valor_contrato',
   'data_inicio', 'data_termino_prevista', 'latitude', 'longitude', 'trecho', 'instalacao_id',
-  'fiscal_responsavel',
+  'fiscal_responsavel', 'fiscal_titulo', 'fiscal_registro', 'fiscal_matricula',
+];
+
+/** Configuração que o secretário edita (regra de situação, dados do órgão e assinatura). */
+export const CAMPOS_CONFIGURACAO = [
+  'tolerancia_atraso_pontos', 'dias_sem_atualizacao_alerta', 'orgao_nome', 'orgao_sigla', 'orgao_endereco',
+  'orgao_telefone', 'orgao_email', 'prefeitura_cnpj', 'secretario_nome', 'secretario_cargo', 'secretario_matricula',
+];
+
+/** Colunas de um item da planilha de serviços que se corrigem direto (UPDATE). */
+export const CAMPOS_ITEM_ORCAMENTO = [
+  'ordem', 'nivel', 'numero', 'codigo', 'fonte', 'descricao', 'unidade', 'quantidade', 'preco_unitario',
+  'total', 'tipo', 'removido',
 ];
 
 /** Colunas da instalação pública que o gabinete grava (INSERT e UPDATE). */

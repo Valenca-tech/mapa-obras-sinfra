@@ -4,7 +4,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { CAMPOS_OBRA_EDITAVEIS, CAMPOS_INSTALACAO } from '../../src/api/campos.js';
+import {
+  CAMPOS_OBRA_EDITAVEIS, CAMPOS_INSTALACAO, CAMPOS_CONFIGURACAO, CAMPOS_ITEM_ORCAMENTO,
+} from '../../src/api/campos.js';
 
 const ler = (caminho) => readFileSync(new URL(caminho, import.meta.url), 'utf8');
 
@@ -45,4 +47,6 @@ test('colunas editáveis do frontend batem com os GRANT do schema', () => {
     CAMPOS_INSTALACAO.filter((c) => c !== 'id').sort(),
   );
   assert.deepEqual(colunasDoGrant(schema, 'insert', 'atualizacoes'), ['id', 'obra_id', 'observacao', 'percentual_executado']);
+  assert.deepEqual(colunasDoGrant(schema, 'update', 'configuracao'), [...CAMPOS_CONFIGURACAO].sort());
+  assert.deepEqual(colunasDoGrant(schema, 'update', 'orcamento_itens'), [...CAMPOS_ITEM_ORCAMENTO].sort());
 });

@@ -6,7 +6,9 @@ import schema from '../../supabase/schema.sql?raw';
 import seed from '../../supabase/seed_demo.sql?raw';
 import instalacoes from '../../supabase/instalacoes_iniciais.sql?raw';
 import { mensagemDeErro, ErroAcao } from './erros.js';
-import { CAMPOS_OBRA_EDITAVEIS, CAMPOS_INSTALACAO, filtrar, temDocumento, novoId } from './campos.js';
+import {
+  CAMPOS_OBRA_EDITAVEIS, CAMPOS_INSTALACAO, CAMPOS_CONFIGURACAO, CAMPOS_ITEM_ORCAMENTO, filtrar, temDocumento, novoId,
+} from './campos.js';
 import { NOME_BANCO, SENHA_DEMO, usuariosDemo, popularDemonstracao, sqlDeslocarDatas, versaoDemo } from './demo_dados.js';
 import { hojeEmImperatriz, diasEntre } from '../lib/situacao.js';
 
@@ -397,13 +399,94 @@ export async function editarInstalacao(id, campos) {
   if (!n) throw new ErroAcao('Você não tem permissão para editar esta instalação.');
 }
 
+// UPDATE só das colunas permitidas, com os valores vindos em JSON (mesmo
+// formato do PostgREST). Devolve as linhas alteradas.
+function atualizar(tx, tabela, id, valores, chave = 'id') {
+  const cols = Object.keys(valores);
+  return tx.query(
+    `update ${tabela} set (${cols.join(', ')}) = (select ${cols.join(', ')} from jsonb_populate_record(null::${tabela}, $2::jsonb))
+      where ${chave} = $1 returning to_jsonb(${tabela}) as linha`,
+    [id, JSON.stringify(valores)],
+  );
+}
+
 export async function salvarConfiguracao(c) {
-  const n = await comoUsuario(async (tx) => {
-    const r = await tx.query(
-      'update configuracao set tolerancia_atraso_pontos = $1, dias_sem_atualizacao_alerta = $2 returning id',
-      [c.tolerancia_atraso_pontos, c.dias_sem_atualizacao_alerta],
-    );
-    return r.rows.length;
-  });
+  const valores = filtrar(c, CAMPOS_CONFIGURACAO);
+  if (!Object.keys(valores).length) return;
+  const n = await comoUsuario(async (tx) => (await atualizar(tx, 'configuracao', true, valores)).rows.length);
   if (!n) throw new ErroAcao('Você não tem permissão para alterar a configuração.');
 }
+
+// ---------------------------------------------------------------- planilha de serviços
+
+/** Planilha vigente da obra: { orcamento, itens } ou null. */
+export async function obterOrcamento(obraId) {
+  const orcamento = (await json('select * from orcamentos where obra_id = $1 and ativo', [obraId]))[0];
+  if (!orcamento) return null;
+  const itens = await json('select * from orcamento_itens where orcamento_id = $1 order by ordem', [orcamento.id]);
+  return { orcamento, itens };
+}
+
+export const listarOrcamentos = (obraId) =>
+  json('select * from orcamentos where obra_id = $1 order by criado_em desc', [obraId]);
+
+const CAMPOS_IMPORTACAO = ['nivel', 'numero', 'codigo', 'fonte', 'descricao', 'unidade', 'quantidade', 'preco_unitario', 'total', 'tipo'];
+
+export const importarOrcamento = (obraId, dadosPlanilha, itens) =>
+  valor('public.importar_orcamento($1, $2::jsonb, $3::jsonb)', [
+    obraId,
+    JSON.stringify({ id: novoId(), ...dadosPlanilha }),
+    JSON.stringify(itens.map((x) => filtrar(x, CAMPOS_IMPORTACAO))),
+  ]);
+
+export async function editarOrcamento(id, campos) {
+  const valores = filtrar(campos, ['descricao', 'data_base', 'bdi_percentual']);
+  if (!Object.keys(valores).length) return;
+  const n = await comoUsuario(async (tx) => (await atualizar(tx, 'orcamentos', id, valores)).rows.length);
+  if (!n) throw new ErroAcao('Esta planilha não pode mais ser alterada (é antiga ou a obra está arquivada).');
+}
+
+export async function editarItemOrcamento(id, campos) {
+  const valores = filtrar(campos, CAMPOS_ITEM_ORCAMENTO);
+  if (!Object.keys(valores).length) return null;
+  const linhas = await comoUsuario(async (tx) => (await atualizar(tx, 'orcamento_itens', id, valores)).rows);
+  if (!linhas.length) throw new ErroAcao('Este item não pode ser alterado (planilha antiga, obra arquivada ou sem permissão).');
+  return linhas[0].linha;
+}
+
+export async function adicionarItemOrcamento(orcamentoId, item) {
+  const linha = {
+    id: novoId(),
+    ...filtrar(item, ['id', ...CAMPOS_ITEM_ORCAMENTO.filter((c) => c !== 'removido')]),
+    orcamento_id: orcamentoId,
+  };
+  const cols = Object.keys(linha);
+  try {
+    await comoUsuario((tx) =>
+      tx.query(
+        `insert into orcamento_itens (${cols.join(', ')})
+         select ${cols.join(', ')} from jsonb_populate_record(null::orcamento_itens, $1::jsonb)`,
+        [JSON.stringify(linha)],
+      ),
+    );
+  } catch (e) {
+    if (!jaGravado(e, 'orcamento_itens')) throw e;
+  }
+  return linha.id;
+}
+
+// ---------------------------------------------------------------- documentos gerados
+
+export const listarDocumentosGerados = (obraId) =>
+  json(
+    `select id, obra_id, tipo, ano, numero, numero_protocolo, gerado_por_nome, gerado_em
+       from documentos_gerados where obra_id = $1 order by gerado_em desc`,
+    [obraId],
+  );
+
+export const obterDocumentoGerado = async (id) => (await json('select * from documentos_gerados where id = $1', [id]))[0] ?? null;
+
+export const registrarDocumentoGerado = ({ id, obraId, tipo, conteudo, protocolo }) =>
+  valor('public.registrar_documento_gerado($1, $2, $3, $4::jsonb, $5)', [
+    id ?? novoId(), obraId, tipo, JSON.stringify(conteudo ?? {}), protocolo || null,
+  ]);
