@@ -4,6 +4,7 @@
 // A escolha fica guardada neste aparelho.
 import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue';
 import { estado } from '../estado.js';
+import { ChevronDown } from 'lucide-vue-next';
 import { svgInstalacao } from '../lib/mapa.js';
 
 const aberto = ref(false);
@@ -93,7 +94,7 @@ onBeforeUnmount(() => {
       <span class="mudo num">
         ({{ totalVisivel }}<template v-if="!todosVisiveis"> de {{ estado.instalacoes.length }}</template>)
       </span>
-      <span class="camada__seta" aria-hidden="true">▾</span>
+      <ChevronDown class="icone camada__seta" aria-hidden="true" />
     </button>
 
     <div v-if="aberto" id="camada-tipos" class="camada__painel" role="group" aria-label="Tipos de instalação pública no mapa">
@@ -158,35 +159,34 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 7px;
   font: inherit;
-  font-size: 0.86rem;
-  font-weight: 600;
+  font-size: 0.9rem;
+  font-weight: 500;
   white-space: nowrap;
   cursor: pointer;
-  padding: 7px 10px;
-  min-height: 38px;
+  padding: 6px 10px;
+  min-height: 34px;
   color: var(--texto);
-  background: rgba(255, 255, 255, 0.96);
-  border: 1px solid var(--borda);
-  border-radius: var(--raio-p);
-  box-shadow: var(--sombra);
+  background: var(--superficie);
+  border: 1px solid var(--borda-forte);
+  border-radius: var(--raio);
 }
 .camada__botao:hover {
   background: #fff;
 }
 .camada__seta {
-  font-size: 0.75rem;
+  width: 14px;
+  height: 14px;
   color: var(--texto-2);
 }
 .camada__painel {
   position: absolute;
-  right: 0;
-  top: calc(100% + 6px);
+  left: 0;
+  top: calc(100% + 4px);
   width: min(340px, calc(100vw - 24px));
   max-height: min(70vh, 560px);
   overflow-y: auto;
   background: var(--superficie);
-  border: 1px solid var(--borda);
-  border-radius: var(--raio);
+  border-radius: var(--raio-g);
   box-shadow: var(--sombra-alta);
   padding: 8px;
 }

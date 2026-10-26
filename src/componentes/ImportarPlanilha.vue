@@ -297,9 +297,8 @@ const TIPOS = { servico: 'Serviço', material: 'Material', equipamento: 'Equipam
   border-radius: var(--raio-p);
 }
 .importar__resumo dt {
-  font-size: 0.75rem;
+  font-size: 0.84rem;
   color: var(--texto-3);
-  text-transform: uppercase;
 }
 .importar__resumo dd {
   margin: 0;

@@ -1,6 +1,13 @@
 # Mapa de Obras SINFRA (piloto)
 
-Ferramenta web para a Secretaria Municipal de Infraestrutura e Serviços Públicos de Imperatriz-MA: o gabinete cadastra as obras, o fiscal atualiza o percentual executado e o secretário vê no mapa, por cor e por texto, o que está em dia e o que está atrasado. Por trás do mapa fica a **Central de Obras**: a planilha de serviços de cada contrato e a emissão de declarações, atestados, fichas técnicas e planilhas no papel timbrado da Prefeitura.
+Ferramenta web para a Secretaria Municipal de Infraestrutura e Serviços Públicos de Imperatriz-MA: o gabinete cadastra as obras, o fiscal atualiza o percentual executado e o secretário vê no mapa, por cor e por texto, o que está em dia e o que está atrasado. Cada obra tem uma página com a planilha de serviços do contrato e a emissão de declarações, atestados, fichas técnicas e planilhas no papel timbrado da Prefeitura.
+
+## Navegação
+
+- **Menu lateral:** Obras, Lançamentos, Pendências (com o número de pendentes), Instalações públicas, Relatório e, para o secretário, Configuração e Auditoria. Recolhe para só os ícones (botão no pé do menu); abaixo de 960 px de largura vira gaveta, aberta pelo botão da barra de cima.
+- **Obras:** uma tela com duas vistas, **Lista** e **Mapa**, e os mesmos filtros (busca, tipo, bairro) e a mesma faixa de situação, que conta e filtra (Atrasada, Paralisada, Em dia...; Sem atualização; Documento pendente). A vista escolhida fica guardada no aparelho. No mapa, clicar numa obra abre uma prévia com o essencial e o botão "Abrir obra".
+- **Página da obra** (`/obras/<id>`): cabeçalho com situação, tipo, bairro e contrato; ações sempre à vista (Lançar percentual, Emitir documento e "Mais": ver no mapa, editar, aditivo, paralisar ou retomar, arquivar); quadro com executado, prazo decorrido, valor, término e último lançamento; abas Visão geral, Serviços e etapas, Documentos e Histórico.
+- Endereços antigos (`#/mapa`, `#/central`, `#/lista`, `#/atualizar`) levam para as telas novas.
 
 Piloto desenvolvido pelo IFMA Campus Imperatriz (LAEST e Concretta Jr). Responsável: Prof. Luan Henrique Varão Silva.
 
@@ -10,8 +17,8 @@ Piloto desenvolvido pelo IFMA Campus Imperatriz (LAEST e Concretta Jr). Respons�
 - **Situação da obra** (calculada, nunca digitada; função única em `src/lib/situacao.js`), nesta ordem: executado 100% → Concluída; paralisada → Paralisada; antes do início → Não iniciada; prazo vencido → Atrasada; prazo decorrido menos executado acima da tolerância (padrão 10 pontos) → Atrasada; demais → Em dia. Alerta à parte de obra sem atualização (padrão 10 dias).
 - **Localização da obra:** um ponto (edificação, praça) ou um **trecho de via** desenhado no mapa, com uma ou mais ruas (pavimentação, drenagem, iluminação). O trecho é guardado em GeoJSON, a extensão é calculada e o pino fica no meio do segmento mais longo. No mapa, o trecho aparece na cor da situação; paralisada fica tracejada e não iniciada, pontilhada.
 - **Instalações públicas:** 270 prédios e espaços do Município (secretarias, galpões, escolas, creches, UBS, hospitais, CAPS, CRAS, praças, mercados, cemitérios...) em 23 tipos agrupados por área, como quadrados azul-escuros com ícone do tipo. O botão "Instalações públicas" no mapa abre uma caixa para ligar ou desligar cada tipo ou área inteira (ex.: só escolas, só UBS); na primeira abertura aparecem só administração e serviços urbanos, para os ícones não cobrirem as obras. O balão de cada uma lista as obras vinculadas a ela e as que estão a até 500 m. Gabinete e secretário cadastram e desativam (não se exclui).
-- **Central de Obras** (menu "Central de Obras"; na ficha do mapa, "Abrir na Central"): tabela das obras e página de cada obra com três abas:
-  - *Resumo e histórico:* situação, ações, dados do contrato e do fiscal, linha do tempo.
+- **Página da obra:**
+  - *Visão geral e Histórico:* alertas, dados do contrato e do fiscal, linha do tempo.
   - *Serviços e etapas:* a planilha orçamentária do contrato importada do Excel (.xlsx, .xls, .ods ou .csv). A importação acha o cabeçalho e as colunas sozinha (a pessoa confere e corrige), prefere o preço com BDI, transforma títulos em etapas, usa as linhas de total só para conferir a soma e compara com o valor do contrato. Depois, cada item se corrige ou se tira da planilha (volta quando quiser); dá para acrescentar itens e etapas. Filtro de serviços, materiais e equipamentos. Nova importação guarda a anterior como versão antiga.
   - *Documentos:* declaração de andamento, atestado de capacidade técnica, ficha técnica da obra e planilha de serviços e valores, em PDF e Word (a planilha também em Excel). Saem no papel timbrado (brasão, ESTADO DO MARANHÃO / PREFEITURA MUNICIPAL DE IMPERATRIZ / Secretaria; endereço, telefone, e-mail e CNPJ no rodapé), com número de controle por tipo e ano (Nº 001/2026-SINFRA), local e data por extenso, valores e percentuais por extenso e assinatura do secretário e do fiscal da obra (título e registro no CREA). Antes de emitir há uma prévia sem número. Cada emissão guarda o retrato do conteúdo: baixar de novo sai igual ao emitido.
   - Dados do papel timbrado e da assinatura do secretário: tela Configuração. Título, registro e matrícula do fiscal e CNPJ da empresa: cadastro da obra.
@@ -62,10 +69,13 @@ src/
   lib/documentos/     conteúdo dos documentos (conteudo.js) e geração de PDF, Word e Excel (arquivos.js)
   api/                acesso a dados: supabase.js (produção) e demo.js (navegador),
                       com o mesmo contrato (campos.js e teste contrato.test.mjs)
-  telas/              Entrar, Mapa, Lista (Central de Obras), Obra (página com abas),
-                      Atualizar, ObraFormulario, Relatorio, Pendencias, Instalacoes,
-                      Configuracao, Auditoria
-  componentes/        ficha da obra, diálogos de ação, filtros, totais etc.
+  telas/              Entrar, Obras (lista e mapa), Obra (página com abas),
+                      Atualizar (Lançamentos), ObraFormulario, Relatorio, Pendencias,
+                      Instalacoes, Configuracao, Auditoria
+  componentes/        menu lateral, tabela e mapa das obras, prévia, diálogos de
+                      ação, planilha, documentos etc.
+  estilo.css          padrão visual: IBM Plex Sans, bordas finas, canto de 4 px,
+                      um único azul de destaque; ícones Lucide (licença ISC)
 public/
   config.example.js   modelo de configuração (o config.js real fica fora do git)
   marcas/             logotipos e brasão do Município (ver LEIAME.txt)

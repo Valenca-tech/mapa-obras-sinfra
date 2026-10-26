@@ -1,10 +1,12 @@
 <script setup>
+// Vista em mapa da tela Obras. Clicar numa obra seleciona (?obra=id) e abre a
+// prévia à direita; a página completa da obra fica a um clique ("Abrir obra").
 import { ref, onMounted, onBeforeUnmount, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import L from 'leaflet';
 import {
-  estado, pode, obrasFiltradas, obrasComSituacao, recarregarObras, recarregarInstalacoes, nomeTipoInstalacao,
-  avisar, quantidadeDeFiltros, limparFiltros, instalacoesVisiveis, mostrarTipoInstalacao,
+  estado, obrasFiltradas, obrasComSituacao, recarregarInstalacoes, nomeTipoInstalacao, avisar,
+  instalacoesVisiveis, mostrarTipoInstalacao,
 } from '../estado.js';
 import { LISTA_SITUACOES } from '../lib/situacao.js';
 import { CENTRO_IMPERATRIZ, camadaBase, iconePino, iconeInstalacao, svgInstalacao, escapar } from '../lib/mapa.js';
@@ -12,16 +14,15 @@ import {
   segmentosDoTrecho, distanciaAteObra, comprimentoTrecho, formatarExtensao, RAIO_PROXIMIDADE_M,
 } from '../lib/geo.js';
 import { pct } from '../lib/formato.js';
-import Totais from '../componentes/Totais.vue';
-import Filtros from '../componentes/Filtros.vue';
-import CamadaInstalacoes from '../componentes/CamadaInstalacoes.vue';
+import CamadaInstalacoes from './CamadaInstalacoes.vue';
+import PreviaObra from './PreviaObra.vue';
 
 // Traço da linha do trecho, além da cor: paralisada tracejada, não iniciada pontilhada.
 const TRACO = { paralisada: '12 9', nao_iniciada: '1 9' };
+const LARGURA_PREVIA = 360;
 
 const rota = useRoute();
 const el = ref(null);
-const filtrosAbertos = ref(false);
 let mapa;
 let camadaObras;
 let camadaInstalacoes;
@@ -41,18 +42,17 @@ function desenharObras() {
     const selecionada = o.id === estado.obraAberta;
     const extensao = o.trecho ? formatarExtensao(comprimentoTrecho(o.trecho)) : '';
     const dica =
-      `<strong>${escapar(o.nome)}</strong><br>${escapar(o.bairro ?? '')} · ` +
-      `<span style="color:${s.texto};font-weight:700">${s.rotulo}</span> · ${pct(s.executado)}` +
+      `<strong>${escapar(o.nome)}</strong><br>${escapar(o.bairro ?? '')} · ${s.rotulo} · ${pct(s.executado)}` +
       (extensao ? ` · trecho de ${extensao}` : '');
     const abrir = () => (estado.obraAberta = o.id);
 
     const linhas = [];
     for (const seg of segmentosDoTrecho(o.trecho)) {
       const casco = L.polyline(seg, {
-        color: '#ffffff', weight: selecionada ? 13 : 10, opacity: 0.95, lineCap: 'round', lineJoin: 'round',
+        color: '#ffffff', weight: selecionada ? 12 : 9, opacity: 0.95, lineCap: 'round', lineJoin: 'round',
       });
       const linha = L.polyline(seg, {
-        color: s.hex, weight: selecionada ? 8 : 6, opacity: 1, dashArray: TRACO[s.codigo],
+        color: s.hex, weight: selecionada ? 7 : 5, opacity: 1, dashArray: TRACO[s.codigo],
         lineCap: s.codigo === 'nao_iniciada' ? 'round' : 'butt', lineJoin: 'round',
       });
       for (const l of [casco, linha]) {
@@ -76,8 +76,7 @@ function desenharObras() {
   enquadrar();
 }
 
-// Enquadra todas as obras uma vez, só quando o mapa já tem tamanho na tela
-// (com a aba em segundo plano o contêiner pode estar com 0 px).
+// Enquadra todas as obras uma vez, só quando o mapa já tem tamanho na tela.
 function enquadrar() {
   if (!mapa || enquadrou || !desenhos.size || rota.query.instalacao) return;
   const { x, y } = mapa.getSize();
@@ -86,23 +85,23 @@ function enquadrar() {
   enquadrou = true;
 }
 
-// Leva a obra aberta para a parte do mapa que a ficha não cobre.
+// Leva a obra selecionada para a parte do mapa que a prévia não cobre.
 function focarObra(id) {
   const d = mapa && id && desenhos.get(id);
   if (!d) return;
-  const largo = window.innerWidth > 640;
+  const largo = window.innerWidth > 760;
   const zoom = Math.max(mapa.getZoom(), 15);
   if (d.linhas.length) {
     const limites = L.featureGroup(d.linhas).getBounds().extend(d.pino.getLatLng());
     const altura = mapa.getSize().y;
     mapa.fitBounds(limites, {
       paddingTopLeft: [40, 40],
-      paddingBottomRight: largo ? [500, 40] : [40, Math.round(altura * 0.6)],
+      paddingBottomRight: largo ? [LARGURA_PREVIA + 40, 40] : [40, Math.round(altura * 0.55)],
       maxZoom: 17,
     });
     return;
   }
-  const ponto = mapa.project(d.pino.getLatLng(), zoom).add([largo ? 230 : 0, largo ? 0 : 160]);
+  const ponto = mapa.project(d.pino.getLatLng(), zoom).add([largo ? LARGURA_PREVIA / 2 : 0, largo ? 0 : 140]);
   mapa.setView(mapa.unproject(ponto, zoom), zoom, { animate: true });
 }
 
@@ -112,7 +111,7 @@ function itemObra(o, extra = '') {
   const s = o.situacao;
   return (
     `<li><button type="button" class="balao__obra" data-obra="${escapar(o.id)}">` +
-    `<i style="background:${s.hex}">${s.simbolo}</i>` +
+    `<i style="background:${s.hex}" aria-hidden="true"></i>` +
     `<span><strong>${escapar(o.nome)}</strong><small>${s.rotulo} · ${pct(s.executado)}${extra}</small></span>` +
     `</button></li>`
   );
@@ -191,8 +190,7 @@ function abrirInstalacaoDaRota() {
 
 onMounted(async () => {
   mapa = L.map(el.value, { zoomControl: false }).setView(CENTRO_IMPERATRIZ, 13);
-  // À esquerda: no computador a ficha da obra ocupa a direita da tela.
-  L.control.zoom({ position: 'topleft' }).addTo(mapa);
+  L.control.zoom({ position: 'bottomright' }).addTo(mapa);
   camadaBase().addTo(mapa);
   camadaInstalacoes = L.featureGroup().addTo(mapa);
   camadaObras = L.featureGroup().addTo(mapa);
@@ -229,15 +227,14 @@ onMounted(async () => {
   desenharInstalacoes();
   desenharObras();
   try {
-    await Promise.all([recarregarObras(), recarregarInstalacoes()]);
+    await recarregarInstalacoes();
   } catch (e) {
     avisar(e.message, 'erro'); // segue com o que já estava carregado
   }
   if (!mapa) return; // saiu da tela antes de a recarga terminar
   revelarInstalacaoDaRota();
-  desenharInstalacoes(); // já com a lista nova, antes de abrir o balão
+  desenharInstalacoes();
   abrirInstalacaoDaRota();
-  // Vindo do cadastro ou da edição com a ficha já aberta: leva o mapa até a obra.
   if (estado.obraAberta) {
     desenharObras();
     focarObra(estado.obraAberta);
@@ -251,14 +248,12 @@ onBeforeUnmount(() => {
 
 watch(obrasFiltradas, desenharObras);
 watch(instalacoesVisiveis, desenharInstalacoes);
-// Já no mapa e veio outro ?instalacao= (link da ficha): a tela não remonta.
 watch(
   () => rota.query.instalacao,
   (id) => {
     if (!id) return;
     revelarInstalacaoDaRota();
-    // espera a camada ser redesenhada antes de abrir o balão
-    setTimeout(abrirInstalacaoDaRota);
+    setTimeout(abrirInstalacaoDaRota); // espera a camada ser redesenhada
   },
 );
 watch(
@@ -271,202 +266,127 @@ watch(
 </script>
 
 <template>
-  <div :class="['tela-mapa', estado.obraAberta && 'tela-mapa--com-ficha']">
-    <div class="tela-mapa__painel">
-      <Totais />
-      <div class="tela-mapa__linha">
-        <button class="btn tela-mapa__botao-filtros" :aria-expanded="filtrosAbertos" @click="filtrosAbertos = !filtrosAbertos">
-          Filtros<template v-if="quantidadeDeFiltros"> ({{ quantidadeDeFiltros }})</template>
-        </button>
-        <button
-          v-if="quantidadeDeFiltros && !filtrosAbertos"
-          type="button"
-          class="btn btn--link tela-mapa__limpar"
-          @click="limparFiltros"
-        >
-          Limpar
-        </button>
-        <div :class="['tela-mapa__filtros', filtrosAbertos && 'aberto']"><Filtros /></div>
-        <div class="acoes tela-mapa__acoes">
-          <RouterLink to="/central" class="btn">Central de Obras</RouterLink>
-          <RouterLink to="/relatorio" class="btn">Imprimir relatório</RouterLink>
-          <RouterLink v-if="pode('obra.cadastrar')" to="/obras/nova" class="btn btn--primario">+ Nova obra</RouterLink>
-        </div>
-      </div>
-    </div>
-    <div class="tela-mapa__mapa">
-      <div ref="el" class="tela-mapa__leaflet" role="region" aria-label="Mapa das obras de Imperatriz"></div>
-      <CamadaInstalacoes class="tela-mapa__camada" />
-      <p v-if="!obrasFiltradas.length" class="tela-mapa__vazio">Nenhuma obra com estes filtros.</p>
-    </div>
+  <div class="mapa-obras">
+    <div ref="el" class="mapa-obras__leaflet" role="region" aria-label="Mapa das obras de Imperatriz"></div>
+    <CamadaInstalacoes class="mapa-obras__camada" />
+    <p v-if="!obrasFiltradas.length" class="mapa-obras__vazio">Nenhuma obra com estes filtros.</p>
+    <PreviaObra v-if="estado.obraAberta" :key="estado.obraAberta" :id="estado.obraAberta" class="mapa-obras__previa" />
   </div>
 </template>
 
 <style scoped>
-.tela-mapa {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-}
-.tela-mapa__painel {
-  padding: 12px 16px 10px;
-  background: var(--superficie);
-  border-bottom: 1px solid var(--borda);
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  z-index: 2;
-}
-.tela-mapa__linha {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  align-items: center;
-  justify-content: space-between;
-}
-.tela-mapa__filtros {
-  flex: 1 1 520px;
-}
-.tela-mapa__botao-filtros,
-.tela-mapa__limpar {
-  display: none;
-}
-/* Computador com a ficha aberta (460 px à direita): painel e controles do
-   mapa saem de baixo dela. */
-@media (min-width: 641px) {
-  .tela-mapa--com-ficha .tela-mapa__painel {
-    padding-right: 476px;
-  }
-  .tela-mapa--com-ficha .tela-mapa__camada {
-    right: 470px;
-  }
-  .tela-mapa--com-ficha :deep(.leaflet-right) {
-    right: 460px;
-  }
-}
-/* controle da camada de instalações (o visual fica no CamadaInstalacoes.vue) */
-.tela-mapa__camada {
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  z-index: 600;
-}
-.tela-mapa__mapa {
-  flex: 1;
+.mapa-obras {
   position: relative;
-  min-height: 420px;
+  flex: 1;
+  min-height: 360px;
 }
-.tela-mapa__leaflet {
+.mapa-obras__leaflet {
   position: absolute;
   inset: 0;
 }
-.tela-mapa__vazio {
+.mapa-obras__camada {
   position: absolute;
-  top: 16px;
+  top: 12px;
+  left: 12px;
+  z-index: 600;
+}
+.mapa-obras__previa {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 700;
+  width: 360px;
+  max-height: calc(100% - 24px);
+}
+.mapa-obras__vazio {
+  position: absolute;
+  top: 12px;
   left: 50%;
   transform: translateX(-50%);
   z-index: 500;
   margin: 0;
   background: var(--superficie);
-  padding: 8px 14px;
+  padding: 7px 12px;
+  border: 1px solid var(--borda);
   border-radius: var(--raio);
-  box-shadow: var(--sombra);
 }
-.tela-mapa :deep(.legenda) {
-  background: rgba(255, 255, 255, 0.95);
-  border-radius: var(--raio-p);
-  box-shadow: var(--sombra);
-  padding: 8px 10px;
+.mapa-obras :deep(.legenda) {
+  background: var(--superficie);
+  border: 1px solid var(--borda-forte);
+  border-radius: var(--raio);
+  padding: 7px 10px;
   display: flex;
   flex-direction: column;
   gap: 4px;
-  font-size: 0.8rem;
+  font-size: 0.86rem;
 }
-.tela-mapa :deep(.legenda__itens) {
+.mapa-obras :deep(.legenda__itens) {
   display: flex;
   flex-direction: column;
   gap: 4px;
 }
-.tela-mapa :deep(.legenda--fechada .legenda__itens) {
+.mapa-obras :deep(.legenda--fechada .legenda__itens) {
   display: none;
 }
-.tela-mapa :deep(.legenda__botao) {
+.mapa-obras :deep(.legenda__botao) {
   border: none;
   background: none;
   padding: 0;
   font: inherit;
-  font-weight: 700;
-  font-size: 0.78rem;
+  font-weight: 600;
   color: var(--texto-2);
   text-align: left;
   cursor: pointer;
 }
-.tela-mapa :deep(.legenda__botao)::after {
-  content: ' ▾';
-}
-.tela-mapa :deep(.legenda--fechada .legenda__botao)::after {
-  content: ' ▸';
-}
-.tela-mapa :deep(.legenda span) {
+.mapa-obras :deep(.legenda span) {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 7px;
 }
-.tela-mapa :deep(.legenda i) {
+.mapa-obras :deep(.legenda i) {
   font-style: normal;
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
   border-radius: 50%;
   color: #fff;
-  font-size: 10px;
-  font-weight: 800;
+  font-size: 9px;
+  font-weight: 700;
   display: inline-flex;
   align-items: center;
   justify-content: center;
 }
-.tela-mapa :deep(.legenda__sep) {
+.mapa-obras :deep(.legenda__sep) {
   margin-top: 3px;
   padding-top: 5px;
   border-top: 1px solid var(--borda);
 }
-.tela-mapa :deep(.legenda__linha) {
+.mapa-obras :deep(.legenda__linha) {
   display: inline-block;
-  width: 18px;
-  height: 6px;
-  border-radius: 3px;
-  background: linear-gradient(90deg, #b91c1c 0 50%, #0f9d7a 50% 100%);
-  box-shadow: 0 0 0 2px #fff, 0 0 0 3px var(--borda-forte);
+  width: 16px;
+  height: 5px;
+  background: linear-gradient(90deg, #b91c1c 0 50%, #0b7a5e 50% 100%);
 }
 @media (pointer: coarse) {
-  .tela-mapa :deep(.legenda__botao) {
-    min-height: 44px;
+  .mapa-obras :deep(.legenda__botao) {
+    min-height: 40px;
     padding: 0 6px;
   }
 }
-@media (max-width: 760px) {
-  .tela-mapa__botao-filtros,
-  .tela-mapa__limpar {
-    display: inline-flex;
-  }
-  .tela-mapa__filtros {
+/* toque: zoom com os dedos, sem os botões + e − */
+@media (pointer: coarse) {
+  .mapa-obras :deep(.leaflet-control-zoom) {
     display: none;
-    flex-basis: 100%;
-    order: 3;
   }
-  .tela-mapa__filtros.aberto {
-    display: block;
-  }
-  .tela-mapa__acoes {
-    flex: 1;
-    justify-content: flex-end;
-  }
-  .tela-mapa__acoes .btn {
-    padding: 6px 10px;
-    font-size: 0.85rem;
-  }
-  .tela-mapa__mapa {
-    min-height: 60dvh;
+}
+@media (max-width: 760px) {
+  .mapa-obras__previa {
+    top: auto;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: auto;
+    max-height: 75%;
+    z-index: 1100; /* por cima dos controles do mapa enquanto aberta */
   }
 }
 </style>

@@ -23,6 +23,16 @@ function lerTiposOcultos() {
 }
 let tiposOcultosDePadrao = lerTiposOcultos() === null;
 
+// Menu lateral recolhido (só ícones): preferência deste aparelho.
+const CHAVE_MENU = 'mapa-obras-menu-recolhido';
+function lerMenuRecolhido() {
+  try {
+    return localStorage.getItem(CHAVE_MENU) === '1';
+  } catch {
+    return false;
+  }
+}
+
 function filtrosVazios() {
   return { situacao: '', tipo: '', bairro: '', busca: '', pendencia: false, alerta: false };
 }
@@ -40,7 +50,8 @@ export const estado = reactive({
   hoje: hojeEmImperatriz(),
   filtros: filtrosVazios(),
   tiposInstalacaoOcultos: lerTiposOcultos() ?? [], // camada do mapa: tipos escondidos
-  obraAberta: null, // id da obra exibida na ficha
+  menuRecolhido: lerMenuRecolhido(),
+  obraAberta: null, // id da obra selecionada no mapa (prévia)
   acao: null, // { id, tipo, obra, evento } diálogo de ação aberto
   versao: 0, // incrementa a cada gravação, para as telas recarregarem
   aviso: null, // { texto, tipo }
@@ -124,6 +135,17 @@ watch(
   (v) => {
     try {
       localStorage.setItem(CHAVE_TIPOS_OCULTOS, JSON.stringify(v));
+    } catch {
+      /* sem storage: vale só enquanto a página estiver aberta */
+    }
+  },
+);
+
+watch(
+  () => estado.menuRecolhido,
+  (v) => {
+    try {
+      localStorage.setItem(CHAVE_MENU, v ? '1' : '0');
     } catch {
       /* sem storage: vale só enquanto a página estiver aberta */
     }

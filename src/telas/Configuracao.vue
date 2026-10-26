@@ -5,6 +5,7 @@ import { ref, onMounted } from 'vue';
 import { api, modoDemo } from '../api/index.js';
 import { estado, avisar, ROTULO_PAPEL, mensagemDeFalhaAoGravar } from '../estado.js';
 import { lerNumero, lerPercentual, pontos } from '../lib/formato.js';
+import { Check } from 'lucide-vue-next';
 
 const tolerancia = ref(pontos(estado.config.tolerancia_atraso_pontos));
 const dias = ref(String(estado.config.dias_sem_atualizacao_alerta));
@@ -98,9 +99,9 @@ const tem = (papel, permissao) => papel.codigo === 'secretario' || papel.permiss
 
 <template>
   <div class="config">
-    <div class="barra-titulo"><h1>Configuração</h1></div>
+    <div class="pagina__cabecalho"><h1>Configuração</h1></div>
 
-    <form class="cartao config__form" @submit.prevent="salvar">
+    <form class="painel config__form" @submit.prevent="salvar">
       <h2>Regra de situação</h2>
       <div class="grade">
         <label class="campo">
@@ -118,7 +119,7 @@ const tem = (papel, permissao) => papel.codigo === 'secretario' || papel.permiss
       <div><button class="btn btn--primario" :disabled="salvando">{{ salvando ? 'Salvando…' : 'Salvar' }}</button></div>
     </form>
 
-    <form class="cartao config__form" @submit.prevent="salvarOrgao">
+    <form class="painel config__form" @submit.prevent="salvarOrgao">
       <h2>Papel timbrado e assinatura dos documentos</h2>
       <p class="mudo pequeno">
         Saem no cabeçalho, no rodapé e na assinatura das declarações, atestados, fichas técnicas e planilhas emitidas
@@ -145,7 +146,7 @@ const tem = (papel, permissao) => papel.codigo === 'secretario' || papel.permiss
 
     <p v-if="erroCarga" class="caixa-erro" role="alert">{{ erroCarga }}</p>
 
-    <section class="cartao">
+    <section class="painel">
       <h2>Perfis e permissões</h2>
       <p class="mudo pequeno">
         No piloto, usuários são criados e têm o perfil alterado pela Concretta Jr no painel do Supabase.
@@ -163,20 +164,20 @@ const tem = (papel, permissao) => papel.codigo === 'secretario' || papel.permiss
             <tr v-for="perm in permissoes" :key="perm.codigo">
               <td>{{ perm.descricao }}</td>
               <td v-for="p in papeis" :key="p.codigo" class="centro">
-                <span v-if="tem(p, perm.codigo)" aria-label="sim" style="color: var(--s-em-dia); font-weight: 700">✓</span>
+                <Check v-if="tem(p, perm.codigo)" class="icone config__sim" aria-label="sim" />
                 <span v-else aria-label="não" class="mudo">·</span>
               </td>
             </tr>
             <tr>
               <td>Consultar mapa, lista, fichas e relatório</td>
-              <td v-for="p in papeis" :key="p.codigo" class="centro" style="color: var(--s-em-dia); font-weight: 700">✓</td>
+              <td v-for="p in papeis" :key="p.codigo" class="centro"><Check class="icone config__sim" aria-label="sim" /></td>
             </tr>
           </tbody>
         </table>
       </div>
     </section>
 
-    <section class="cartao">
+    <section class="painel">
       <h2>Usuários</h2>
       <div class="tabela-rolagem">
         <table class="tabela">
@@ -215,5 +216,12 @@ const tem = (papel, permissao) => papel.codigo === 'secretario' || papel.permiss
 }
 .centro {
   text-align: center !important;
+}
+.config__sim {
+  color: var(--ok);
+  vertical-align: middle;
+}
+.config h2 {
+  font-size: 1rem;
 }
 </style>

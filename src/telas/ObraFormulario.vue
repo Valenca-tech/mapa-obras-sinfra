@@ -7,12 +7,13 @@ import { api } from '../api/index.js';
 import { ehErroDeRede } from '../api/erros.js';
 import { novoId } from '../api/campos.js';
 import {
-  estado, pode, bairros, aposGravar, abrirAcao, obrasComSituacao, nomeTipoInstalacao, registrarNaoSalvo,
+  estado, bairros, aposGravar, obrasComSituacao, nomeTipoInstalacao, registrarNaoSalvo,
   mensagemDeFalhaAoGravar, avisar,
 } from '../estado.js';
 import { lerNumero, lerPercentual, erroDeData, data as fmtData, reais } from '../lib/formato.js';
 import { distanciaMetros, formatarExtensao } from '../lib/geo.js';
 import SeletorLocal from '../componentes/SeletorLocal.vue';
+import { ChevronRight } from 'lucide-vue-next';
 import DocumentoCampos from '../componentes/DocumentoCampos.vue';
 
 const props = defineProps({ id: { type: String, default: null } });
@@ -177,7 +178,7 @@ async function salvar() {
     }
     sujo.value = false;
     await aposGravar(editando.value ? 'Alterações salvas.' : 'Obra cadastrada.');
-    roteador.push({ path: '/mapa', query: { obra: id } });
+    roteador.push(`/obras/${id}`);
   } catch (e) {
     if (!editando.value && ehErroDeRede(e)) talvezGravada = true;
     erroGeral.value = mensagemDeFalhaAoGravar(e);
@@ -209,7 +210,7 @@ watch(
     }
     if (!o || o.arquivada) {
       sujo.value = false;
-      roteador.push('/mapa');
+      roteador.push('/obras');
       return;
     }
     original.value = o;
@@ -226,17 +227,22 @@ const marcarSujo = () => (sujo.value = true);
 
 <template>
   <div class="form-obra">
-    <div class="barra-titulo">
-      <h1>{{ editando ? 'Editar obra' : 'Nova obra' }}</h1>
-      <div v-if="editando && original && !original.arquivada" class="acoes">
-        <button v-if="pode('obra.aditivo')" class="btn" @click="abrirAcao('aditivo', original)">Aditivo de prazo</button>
-        <button v-if="pode('obra.arquivar')" class="btn btn--perigo" @click="abrirAcao('arquivar', original)">Arquivar obra</button>
-      </div>
+    <nav class="migalhas" aria-label="Você está em">
+      <RouterLink to="/obras">Obras</RouterLink>
+      <template v-if="editando && original">
+        <ChevronRight class="icone" aria-hidden="true" />
+        <RouterLink :to="`/obras/${original.id}`">{{ original.nome }}</RouterLink>
+      </template>
+      <ChevronRight class="icone" aria-hidden="true" />
+      <span aria-current="page">{{ editando ? 'Editar' : 'Nova obra' }}</span>
+    </nav>
+    <div class="pagina__cabecalho">
+      <h1>{{ editando ? 'Editar dados da obra' : 'Nova obra' }}</h1>
     </div>
 
     <p v-if="erroGeral && !carregado" class="caixa-erro">{{ erroGeral }}</p>
 
-    <form v-if="carregado" class="cartao form-obra__cartao" novalidate @submit.prevent="salvar" @input="marcarSujo">
+    <form v-if="carregado" class="painel form-obra__cartao" novalidate @submit.prevent="salvar" @input="marcarSujo">
       <section>
         <h2>Identificação</h2>
         <div class="grade">
@@ -382,8 +388,8 @@ const marcarSujo = () => (sujo.value = true);
       <p v-if="erroGeral" class="caixa-erro" role="alert">{{ erroGeral }}</p>
 
       <div class="form-obra__botoes">
-        <RouterLink to="/mapa" class="btn">Cancelar</RouterLink>
-        <button class="btn btn--primario btn--grande" :disabled="salvando">
+        <RouterLink :to="editando ? `/obras/${props.id}` : '/obras'" class="btn">Cancelar</RouterLink>
+        <button class="btn btn--primario" :disabled="salvando">
           {{ salvando ? 'Salvando…' : editando ? 'Salvar alterações' : 'Cadastrar obra' }}
         </button>
       </div>
@@ -399,14 +405,23 @@ const marcarSujo = () => (sujo.value = true);
 .form-obra__cartao {
   display: flex;
   flex-direction: column;
-  gap: 22px;
-  padding: 20px;
+  padding: 0;
+}
+.form-obra__cartao > section {
+  padding: 20px 24px;
+}
+.form-obra__cartao > section + section {
+  border-top: 1px solid var(--borda);
 }
 .form-obra__cartao h2 {
-  font-size: 1rem;
-  padding-bottom: 6px;
-  border-bottom: 1px solid var(--borda);
+  font-size: 0.98rem;
   margin-bottom: 12px;
+}
+.form-obra__cartao h2 + p {
+  margin: -6px 0 12px;
+}
+.form-obra__cartao > .caixa-erro {
+  margin: 0 24px 16px;
 }
 .form-obra__instalacao {
   margin-top: 14px;
@@ -428,6 +443,9 @@ const marcarSujo = () => (sujo.value = true);
   justify-content: flex-end;
   gap: 8px;
   flex-wrap: wrap;
+  padding: 14px 24px;
+  border-top: 1px solid var(--borda);
+  background: var(--superficie-2);
 }
 .obrig {
   color: var(--s-atrasada);

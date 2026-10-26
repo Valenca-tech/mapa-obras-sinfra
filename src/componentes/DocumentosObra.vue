@@ -8,6 +8,7 @@ import { estado, pode, avisar } from '../estado.js';
 import { TIPOS_DOCUMENTO, montarDocumento } from '../lib/documentos/conteudo.js';
 import { numeroOficial } from '../lib/extenso.js';
 import { dataHora } from '../lib/formato.js';
+import { FileText } from 'lucide-vue-next';
 import GerarDocumento from './GerarDocumento.vue';
 
 const props = defineProps({ obra: { type: Object, required: true } });
@@ -58,27 +59,29 @@ function aoEmitir() {
 <template>
   <div class="docs">
     <section>
-      <h2 class="docs__titulo">Emitir documento</h2>
-      <p class="mudo pequeno docs__explica">
-        Saem no papel timbrado da Prefeitura (brasão, Secretaria, endereço e CNPJ), com número de controle
-        (ex.: Nº 001/{{ estado.hoje.slice(0, 4) }}-SINFRA), data por extenso e assinatura do secretário e do fiscal da obra.
-        Conferir os dados antes de assinar.
+      <h2 class="secao__titulo">Emitir</h2>
+      <ul class="docs__tipos">
+        <li v-for="(t, codigo) in TIPOS_DOCUMENTO" :key="codigo" class="docs__tipo">
+          <FileText class="icone docs__icone" aria-hidden="true" />
+          <div class="docs__texto">
+            <strong>{{ t.nome }}</strong>
+            <span>{{ t.descricao }}</span>
+          </div>
+          <span class="docs__formatos">{{ formatosDe(codigo).map((f) => ROTULO[f]).join(' · ') }}</span>
+          <button v-if="pode('documento.gerar')" type="button" class="btn" @click="gerando = codigo">Emitir</button>
+        </li>
+      </ul>
+      <p class="docs__nota">
+        Papel timbrado da Prefeitura, número de controle (Nº 001/{{ estado.hoje.slice(0, 4) }}-{{ estado.config.orgao_sigla || 'SINFRA' }}),
+        data por extenso e assinatura do secretário e do fiscal. Confira antes de assinar.
+        <template v-if="!pode('documento.gerar')"> Emitir é do gabinete e dos fiscais.</template>
       </p>
-      <div class="docs__tipos">
-        <article v-for="(t, codigo) in TIPOS_DOCUMENTO" :key="codigo" class="cartao docs__tipo">
-          <h3>{{ t.nome }}</h3>
-          <p class="mudo pequeno">{{ t.descricao }}</p>
-          <p class="pequeno docs__formatos">{{ formatosDe(codigo).map((f) => ROTULO[f]).join(', ') }}</p>
-          <button v-if="pode('documento.gerar')" class="btn btn--primario" @click="gerando = codigo">Emitir</button>
-        </article>
-      </div>
-      <p v-if="!pode('documento.gerar')" class="mudo pequeno">Emitir documentos é do gabinete e dos fiscais.</p>
     </section>
 
     <section>
-      <h2 class="docs__titulo">Emitidos para esta obra</h2>
+      <h2 class="secao__titulo">Emitidos para esta obra</h2>
       <p v-if="carregando && !emitidos.length" class="mudo">Carregando…</p>
-      <p v-else-if="!emitidos.length" class="mudo">Nenhum documento emitido ainda.</p>
+      <p v-else-if="!emitidos.length" class="vazio">Nenhum documento emitido ainda.</p>
       <div v-else class="tabela-rolagem">
         <table class="tabela">
           <thead>
@@ -124,46 +127,66 @@ function aoEmitir() {
 .docs {
   display: flex;
   flex-direction: column;
-  gap: 22px;
-}
-.docs__titulo {
-  margin: 0 0 6px;
-}
-.docs__explica {
-  margin: 0 0 12px;
-  max-width: 80ch;
+  gap: 24px;
 }
 .docs__tipos {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
-  gap: 12px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  background: var(--superficie);
+  border: 1px solid var(--borda);
+  border-radius: var(--raio);
 }
 .docs__tipo {
   display: flex;
-  flex-direction: column;
-  gap: 6px;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
 }
-.docs__tipo h3 {
-  margin: 0;
+.docs__tipo + .docs__tipo {
+  border-top: 1px solid var(--borda);
 }
-.docs__tipo p {
-  margin: 0;
+.docs__icone {
+  width: 18px;
+  height: 18px;
+  color: var(--texto-3);
+}
+.docs__texto {
   flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.docs__texto strong {
+  font-weight: 500;
+}
+.docs__texto span {
+  font-size: 0.88rem;
+  color: var(--texto-3);
 }
 .docs__formatos {
-  flex: 0 !important;
+  font-size: 0.86rem;
   color: var(--texto-2);
+  white-space: nowrap;
 }
-.docs__tipo .btn {
-  align-self: flex-start;
+.docs__nota {
+  margin: 8px 0 0;
+  font-size: 0.86rem;
+  color: var(--texto-3);
 }
 .docs__baixar {
   display: flex;
   gap: 4px;
   flex-wrap: wrap;
 }
-.docs__baixar .btn {
-  min-height: 32px;
-  padding: 2px 8px;
+@media (max-width: 640px) {
+  .docs__tipo {
+    flex-wrap: wrap;
+  }
+  .docs__formatos {
+    order: 3;
+    flex-basis: 100%;
+    padding-left: 30px;
+  }
 }
 </style>

@@ -137,7 +137,7 @@ function adicionarPonto(lat, lng) {
 }
 
 function desfazerPonto() {
-  // Logo depois de "+ Outra rua", o segmento atual está vazio: desfaz só ele,
+  // Logo depois de "Adicionar outra rua", o segmento atual está vazio: desfaz só ele,
   // sem tirar ponto da rua anterior.
   if (atual.value.length) atual.value.pop();
   else if (segmentos.value.length > 1) segmentos.value.pop();
@@ -323,7 +323,7 @@ function minhaLocalizacao() {
         </span>
         <span class="seletor__acoes">
           <button type="button" class="btn btn--link" :disabled="!totalPontos" @click="desfazerPonto">Desfazer ponto</button>
-          <button type="button" class="btn btn--link" :disabled="atual.length < 2" @click="novoSegmento">+ Outra rua</button>
+          <button type="button" class="btn btn--link" :disabled="atual.length < 2" @click="novoSegmento">Adicionar outra rua</button>
           <button type="button" class="btn btn--link" :disabled="!totalPontos" @click="limparTrecho">Limpar</button>
         </span>
       </template>

@@ -3,8 +3,7 @@ import { createRouter, createWebHashHistory } from 'vue-router';
 import { estado, pode, sair } from './estado.js';
 
 import Entrar from './telas/Entrar.vue';
-import Mapa from './telas/Mapa.vue';
-import Lista from './telas/Lista.vue';
+import Obras from './telas/Obras.vue';
 import Obra from './telas/Obra.vue';
 import Atualizar from './telas/Atualizar.vue';
 import ObraFormulario from './telas/ObraFormulario.vue';
@@ -14,32 +13,36 @@ import Auditoria from './telas/Auditoria.vue';
 import Pendencias from './telas/Pendencias.vue';
 import Instalacoes from './telas/Instalacoes.vue';
 
-/** Tela inicial: o fiscal cai direto em Atualizar (se puder lançar). */
+/** Tela inicial: o fiscal cai direto em Lançamentos (se puder lançar). */
 export const telaInicial = () =>
-  estado.perfil?.papel === 'fiscal' && pode('percentual.lancar') ? '/atualizar' : '/mapa';
+  estado.perfil?.papel === 'fiscal' && pode('percentual.lancar') ? '/lancamentos' : '/obras';
 
 const routes = [
   { path: '/', redirect: () => telaInicial() },
   { path: '/entrar', component: Entrar, meta: { publica: true, limpa: true } },
-  { path: '/mapa', component: Mapa, meta: { cheia: true } },
-  { path: '/central', component: Lista },
-  { path: '/lista', redirect: '/central' }, // endereço antigo
-  { path: '/atualizar', component: Atualizar, meta: { permissao: 'percentual.lancar' } },
-  { path: '/pendencias', component: Pendencias },
-  { path: '/instalacoes', component: Instalacoes },
+  // Obras: lista e mapa na mesma tela (?ver=mapa), com os mesmos filtros.
+  { path: '/obras', component: Obras, meta: { cheia: true } },
   { path: '/obras/nova', component: ObraFormulario, meta: { permissao: 'obra.cadastrar' } },
   { path: '/obras/:id/editar', component: ObraFormulario, props: true, meta: { permissao: 'obra.editar' } },
   { path: '/obras/:id', component: Obra, props: true },
+  { path: '/lancamentos', component: Atualizar, meta: { permissao: 'percentual.lancar' } },
+  { path: '/pendencias', component: Pendencias },
+  { path: '/instalacoes', component: Instalacoes },
   { path: '/relatorio', component: Relatorio, meta: { limpa: true } },
   { path: '/configuracao', component: Configuracao, meta: { permissao: 'configuracao.editar' } },
   { path: '/auditoria', component: Auditoria, meta: { permissao: 'auditoria.ver' } },
+  // endereços antigos (links salvos)
+  { path: '/mapa', redirect: (para) => ({ path: '/obras', query: { ...para.query, ver: 'mapa' } }) },
+  { path: '/central', redirect: (para) => ({ path: '/obras', query: { ...para.query, ver: 'lista' } }) },
+  { path: '/lista', redirect: (para) => ({ path: '/obras', query: { ...para.query, ver: 'lista' } }) },
+  { path: '/atualizar', redirect: '/lancamentos' },
   { path: '/:caminho(.*)*', redirect: '/' },
 ];
 
 export const rotas = createRouter({
   history: createWebHashHistory(),
   routes,
-  // Topo da página só ao trocar de tela (abrir a ficha muda só o ?obra=);
+  // Topo da página só ao trocar de tela (selecionar obra no mapa muda só o ?obra=);
   // no "voltar", a posição em que estava.
   scrollBehavior: (para, de, salva) => salva ?? (para.path !== de.path ? { top: 0 } : false),
 });
@@ -50,7 +53,7 @@ rotas.beforeEach((para) => {
   if (para.path === '/entrar' && estado.sessao) return telaInicial();
   if (para.meta.permissao && !pode(para.meta.permissao)) {
     const inicial = telaInicial();
-    return para.path === inicial ? '/mapa' : inicial; // nunca redireciona para si mesma
+    return para.path === inicial ? '/obras' : inicial; // nunca redireciona para si mesma
   }
   return true;
 });
@@ -72,10 +75,10 @@ export async function sairDaConta() {
   return true;
 }
 
-// ---------------------------------------------------------------- ficha da obra na URL
+// ---------------------------------------------------------------- obra selecionada no mapa, na URL
 
-// A ficha aberta vira ?obra=<id> na URL: o "voltar" do celular fecha a ficha
-// em vez de trocar a tela de baixo, e o endereço abre a mesma obra.
+// A obra selecionada no mapa vira ?obra=<id> na URL: o "voltar" do celular
+// fecha a prévia em vez de trocar de tela, e o endereço abre a mesma obra.
 let fichaEmpurrada = null; // id da ficha cuja abertura criou entrada no histórico
 
 const obraDaUrl = () => {
@@ -111,8 +114,8 @@ watch(obraDaUrl, (id) => {
   if (id !== estado.obraAberta) estado.obraAberta = id;
 });
 
-/** Fecha a ficha pelo ×: volta no histórico quando a abertura criou uma entrada. */
-export function fecharFicha() {
+/** Fecha a prévia pelo ×: volta no histórico quando a abertura criou uma entrada. */
+export function fecharPrevia() {
   const id = estado.obraAberta;
   if (id && fichaEmpurrada === id && obraDaUrl() === id) {
     fichaEmpurrada = null;

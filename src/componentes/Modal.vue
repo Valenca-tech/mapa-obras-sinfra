@@ -3,6 +3,7 @@
 // (no celular é o gesto para esconder o teclado) e Esc ou × pedem confirmação.
 // O Tab fica preso dentro do diálogo e o foco volta para onde estava ao fechar.
 import { onMounted, onBeforeUnmount, ref } from 'vue';
+import { X } from 'lucide-vue-next';
 
 const props = defineProps({
   titulo: { type: String, required: true },
@@ -60,7 +61,7 @@ onBeforeUnmount(() => {
     <div ref="caixa" class="modal__caixa" :style="{ maxWidth: largura }" role="dialog" aria-modal="true" :aria-label="titulo">
       <header class="modal__topo">
         <h2>{{ titulo }}</h2>
-        <button class="modal__fechar" type="button" aria-label="Fechar" @click="pedirFechar">×</button>
+        <button class="modal__fechar" type="button" aria-label="Fechar" @click="pedirFechar"><X class="icone" aria-hidden="true" /></button>
       </header>
       <div class="modal__corpo"><slot /></div>
       <footer v-if="$slots.rodape" class="modal__rodape"><slot name="rodape" /></footer>
@@ -73,7 +74,7 @@ onBeforeUnmount(() => {
   position: fixed;
   inset: 0;
   z-index: 2500;
-  background: rgba(10, 20, 40, 0.45);
+  background: rgba(16, 24, 40, 0.4);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -81,7 +82,7 @@ onBeforeUnmount(() => {
 }
 .modal__caixa {
   background: var(--superficie);
-  border-radius: 10px;
+  border-radius: var(--raio-g);
   box-shadow: var(--sombra-alta);
   width: 100%;
   max-height: calc(100dvh - 32px);
@@ -93,29 +94,31 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 14px 18px;
+  padding: 12px 12px 12px 20px;
   border-bottom: 1px solid var(--borda);
 }
 .modal__topo h2 {
   margin: 0;
+  font-size: 1.02rem;
 }
 .modal__fechar {
   border: none;
   background: none;
-  font-size: 1.6rem;
-  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
   color: var(--texto-2);
-  width: 40px;
-  height: 40px;
+  width: 34px;
+  height: 34px;
   flex-shrink: 0;
-  border-radius: var(--raio-p);
+  border-radius: var(--raio);
 }
 .modal__fechar:hover {
-  background: #f0f2f6;
+  background: var(--superficie-2);
 }
 .modal__corpo {
-  padding: 16px 18px;
+  padding: 18px 20px;
   overflow-y: auto;
 }
 .modal__rodape {
@@ -123,8 +126,10 @@ onBeforeUnmount(() => {
   justify-content: flex-end;
   flex-wrap: wrap;
   gap: 8px;
-  padding: 12px 18px;
+  padding: 12px 20px;
   border-top: 1px solid var(--borda);
+  background: var(--superficie-2);
+  border-radius: 0 0 var(--raio-g) var(--raio-g);
 }
 @media (pointer: coarse) {
   .modal__fechar {
@@ -138,7 +143,7 @@ onBeforeUnmount(() => {
     padding: 0;
   }
   .modal__caixa {
-    border-radius: 14px 14px 0 0;
+    border-radius: var(--raio-g) var(--raio-g) 0 0;
     max-height: 92dvh;
   }
   .modal__rodape {

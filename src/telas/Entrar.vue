@@ -5,13 +5,13 @@ import { api, modoDemo } from '../api/index.js';
 import { SENHA_DEMO } from '../api/demo_dados.js';
 import { entrar, reiniciarDemonstracao } from '../estado.js';
 import { telaInicial } from '../rotas.js';
-import Marca from '../componentes/Marca.vue';
 
 const roteador = useRouter();
 const email = ref('');
 const senha = ref('');
 const erro = ref('');
 const entrando = ref(false);
+const temPlaca = ref(true);
 
 async function enviar(e = email.value, s = senha.value) {
   if (entrando.value) return;
@@ -36,11 +36,18 @@ const entrarComo = (u) => enviar(u.email, SENHA_DEMO);
 
 <template>
   <div class="entrar">
-    <div class="entrar__cartao cartao">
-      <div class="entrar__marca"><Marca variante="clara" grande /></div>
-      <p class="entrar__sub">Secretaria Municipal de Infraestrutura e Serviços Públicos</p>
+    <div class="entrar__caixa">
+      <header class="entrar__marca">
+        <img v-if="temPlaca" :src="'marcas/prefeitura.png'" alt="Prefeitura de Imperatriz" @error="temPlaca = false" />
+        <div>
+          <strong>SINFRA</strong>
+          <span>Mapa de Obras</span>
+        </div>
+      </header>
+      <p class="entrar__orgao">Secretaria Municipal de Infraestrutura e Serviços Públicos</p>
 
       <form class="entrar__form" @submit.prevent="enviar()">
+        <h1>Entrar</h1>
         <label class="campo">
           <span>E-mail</span>
           <input v-model="email" type="email" autocomplete="username" inputmode="email" required />
@@ -50,25 +57,22 @@ const entrarComo = (u) => enviar(u.email, SENHA_DEMO);
           <input v-model="senha" type="password" autocomplete="current-password" required />
         </label>
         <p v-if="erro" class="caixa-erro" role="alert">{{ erro }}</p>
-        <button class="btn btn--primario btn--grande btn--bloco" :disabled="entrando">
+        <button class="btn btn--primario btn--bloco entrar__enviar" :disabled="entrando">
           {{ entrando ? 'Entrando…' : 'Entrar' }}
         </button>
-        <p class="pequeno mudo entrar__ajuda">Sem cadastro aberto. Para obter acesso, procure o gabinete da SINFRA.</p>
+        <p class="entrar__ajuda">Para obter acesso, procure o gabinete da SINFRA.</p>
       </form>
 
-      <section v-if="modoDemo" class="entrar__demo">
-        <h2>Demonstração</h2>
-        <p class="pequeno">
-          Dados fictícios, guardados só neste navegador. Entre com um dos perfis para ver o que cada um pode fazer
-          (senha <code>{{ SENHA_DEMO }}</code>).
-        </p>
+      <section v-if="modoDemo" class="entrar__demo" aria-labelledby="titulo-demo">
+        <h2 id="titulo-demo">Demonstração</h2>
+        <p>Dados fictícios, guardados só neste navegador. Escolha um perfil (senha <code>{{ SENHA_DEMO }}</code>).</p>
         <div class="entrar__perfis">
-          <button v-for="u in api.usuariosDemo" :key="u.email" class="btn" :disabled="entrando" @click="entrarComo(u)">
+          <button v-for="u in api.usuariosDemo" :key="u.email" type="button" class="btn" :disabled="entrando" @click="entrarComo(u)">
             {{ u.rotulo }}
           </button>
         </div>
         <button class="btn btn--link entrar__reiniciar" type="button" @click="reiniciarDemonstracao">
-          Reiniciar demonstração (apaga o que foi feito)
+          Reiniciar demonstração
         </button>
       </section>
     </div>
@@ -81,40 +85,69 @@ const entrarComo = (u) => enviar(u.email, SENHA_DEMO);
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 24px 16px;
-  background:
-    linear-gradient(180deg, var(--azul) 0, var(--azul) 220px, transparent 220px),
-    var(--fundo);
+  padding: 32px 16px 16px;
 }
-.entrar__cartao {
+.entrar__caixa {
   width: 100%;
-  max-width: 420px;
-  padding: 28px 24px;
-  border-top: 4px solid var(--amarelo-pmi);
+  max-width: 380px;
 }
 .entrar__marca {
   display: flex;
-  justify-content: center;
+  align-items: center;
+  gap: 12px;
 }
-.entrar__sub {
-  text-align: center;
+.entrar__marca img {
+  height: 40px;
+  width: auto;
+}
+.entrar__marca div {
+  display: flex;
+  flex-direction: column;
+  padding-left: 12px;
+  border-left: 1px solid var(--borda-forte);
+  line-height: 1.1;
+}
+.entrar__marca strong {
+  font-family: 'Archivo Black', 'Arial Black', Arial, sans-serif;
+  font-weight: 400;
+  font-size: 1.35rem;
+  color: var(--azul);
+  letter-spacing: 0.02em;
+}
+.entrar__marca span {
+  font-size: 0.84rem;
   color: var(--texto-2);
-  font-size: 0.85rem;
-  margin: 8px 0 20px;
+}
+.entrar__orgao {
+  margin: 10px 0 24px;
+  color: var(--texto-2);
+  font-size: 0.9rem;
 }
 .entrar__form {
   display: flex;
   flex-direction: column;
   gap: 14px;
+  padding: 24px;
+  background: var(--superficie);
+  border: 1px solid var(--borda);
+  border-radius: var(--raio);
+}
+.entrar__form h1 {
+  margin: 0;
+  font-size: 1.15rem;
+}
+.entrar__enviar {
+  min-height: 40px;
 }
 .entrar__ajuda {
   margin: 0;
-  text-align: center;
+  font-size: 0.86rem;
+  color: var(--texto-3);
 }
 .entrar__demo {
-  margin-top: 22px;
-  padding-top: 18px;
-  border-top: 1px dashed var(--borda-forte);
+  margin-top: 20px;
+  padding: 16px 0 0;
+  border-top: 1px solid var(--borda);
 }
 .entrar__demo h2 {
   font-size: 0.95rem;
@@ -123,19 +156,16 @@ const entrarComo = (u) => enviar(u.email, SENHA_DEMO);
 .entrar__demo p {
   margin: 0 0 10px;
   color: var(--texto-2);
-}
-.entrar__reiniciar {
-  margin-top: 10px;
-  font-size: 0.82rem;
-  font-weight: 600;
-  color: var(--texto-2);
+  font-size: 0.9rem;
 }
 .entrar__perfis {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 8px;
 }
-.entrar :deep(.campo input) {
-  min-height: 46px;
+.entrar__reiniciar {
+  margin-top: 10px;
+  font-size: 0.86rem;
+  color: var(--texto-2);
 }
 </style>

@@ -9,6 +9,7 @@ import { estruturar } from '../lib/planilha.js';
 import { dataHora, reais } from '../lib/formato.js';
 import { numeroBr } from '../lib/documentos/conteudo.js';
 import { semAcento } from '../lib/texto.js';
+import { Plus, Upload, Download, TriangleAlert, Search } from 'lucide-vue-next';
 import ImportarPlanilha from './ImportarPlanilha.vue';
 import ItemPlanilha from './ItemPlanilha.vue';
 import GerarDocumento from './GerarDocumento.vue';
@@ -112,19 +113,20 @@ async function aoSalvar(mensagem) {
   <div class="planilha">
     <p v-if="carregando && !planilha" class="mudo">Carregando…</p>
 
-    <div v-else-if="!planilha" class="cartao planilha__vazia">
-      <h2>Sem planilha de serviços</h2>
+    <div v-else-if="!planilha" class="vazio">
+      <strong>Sem planilha de serviços</strong>
       <p>
-        Importe a planilha orçamentária do contrato (Excel, ODS ou CSV). A ferramenta reconhece as colunas de item,
-        código, fonte, descrição, unidade, quantidade, preço unitário e total; as linhas de título viram etapas. Depois
-        dá para corrigir item a item.
+        Importe a planilha orçamentária do contrato (Excel, ODS ou CSV). Colunas e etapas são reconhecidas na importação
+        e cada item pode ser corrigido depois.
       </p>
-      <button v-if="podeEditar" class="btn btn--primario" @click="importando = true">Importar planilha</button>
-      <p v-else class="mudo pequeno">Só o gabinete importa a planilha.</p>
+      <button v-if="podeEditar" class="btn btn--primario" @click="importando = true">
+        <Upload class="icone" aria-hidden="true" />Importar planilha
+      </button>
+      <p v-else class="pequeno">A importação é feita pelo gabinete.</p>
     </div>
 
     <template v-else>
-      <section class="cartao planilha__cabecalho">
+      <section class="painel planilha__cabecalho">
         <div class="planilha__ident">
           <h2>{{ planilha.orcamento.descricao }}</h2>
           <p class="mudo pequeno">
@@ -142,7 +144,7 @@ async function aoSalvar(mensagem) {
           </div>
           <div>
             <dt>Valor do contrato</dt>
-            <dd class="num">{{ reais(obra.valor_contrato) || '—' }}</dd>
+            <dd class="num">{{ reais(obra.valor_contrato) || '–' }}</dd>
           </div>
           <div v-for="[tipo, valor] in porTipo" :key="tipo">
             <dt>{{ PLURAL[tipo] ?? tipo }}</dt>
@@ -153,16 +155,20 @@ async function aoSalvar(mensagem) {
             <dd class="num">{{ estrutura.itens }} itens em {{ estrutura.etapas }} etapas</dd>
           </div>
         </dl>
-        <p v-if="diferenca" class="planilha__aviso" role="note">
-          ⚠ A soma da planilha difere do valor do contrato em {{ reais(Math.abs(diferenca)) }}
-          ({{ diferenca > 0 ? 'a mais' : 'a menos' }}). Confira se faltou alguma linha, se o BDI está fora dos preços ou se houve aditivo de valor.
+        <p v-if="diferenca" class="caixa-alerta" role="note">
+          <TriangleAlert class="icone" aria-hidden="true" />
+          <span>
+            A soma da planilha difere do valor do contrato em {{ reais(Math.abs(diferenca)) }}
+            ({{ diferenca > 0 ? 'a mais' : 'a menos' }}). Confira se faltou alguma linha, se o BDI está fora dos preços ou se
+            houve aditivo de valor.
+          </span>
         </p>
       </section>
 
       <div class="planilha__barra">
-        <label class="campo planilha__filtro">
-          <span>Mostrar</span>
-          <select v-model="filtroTipo">
+        <label class="planilha__filtro">
+          <span class="oculto">Mostrar</span>
+          <select v-model="filtroTipo" class="controle">
             <option value="todos">Todos os itens</option>
             <option value="servico">Só serviços</option>
             <option value="material">Só materiais</option>
@@ -170,14 +176,21 @@ async function aoSalvar(mensagem) {
             <option value="outro">Outros</option>
           </select>
         </label>
-        <label class="campo planilha__busca">
-          <span>Procurar</span>
-          <input v-model="busca" type="search" placeholder="Descrição, código ou item" />
+        <label class="planilha__busca">
+          <span class="oculto">Procurar</span>
+          <Search class="icone" aria-hidden="true" />
+          <input v-model="busca" class="controle" type="search" placeholder="Procurar descrição, código ou item" />
         </label>
         <div class="acoes planilha__acoes">
-          <button v-if="pode('documento.gerar')" class="btn" @click="exportando = true">Exportar (PDF, Word, Excel)</button>
-          <button v-if="podeEditar" class="btn" @click="editando = { novo: true }">+ Item</button>
-          <button v-if="podeEditar" class="btn" @click="importando = true">Importar nova versão</button>
+          <button v-if="pode('documento.gerar')" class="btn" @click="exportando = true">
+            <Download class="icone" aria-hidden="true" />Exportar
+          </button>
+          <button v-if="podeEditar" class="btn" @click="editando = { novo: true }">
+            <Plus class="icone" aria-hidden="true" />Adicionar item
+          </button>
+          <button v-if="podeEditar" class="btn" @click="importando = true">
+            <Upload class="icone" aria-hidden="true" />Importar nova versão
+          </button>
         </div>
       </div>
       <p v-if="filtrado" class="mudo pequeno">
@@ -270,12 +283,6 @@ async function aoSalvar(mensagem) {
   flex-direction: column;
   gap: 12px;
 }
-.planilha__vazia h2 {
-  margin-top: 0;
-}
-.planilha__vazia p {
-  max-width: 70ch;
-}
 .planilha__cabecalho {
   display: flex;
   flex-direction: column;
@@ -283,7 +290,7 @@ async function aoSalvar(mensagem) {
 }
 .planilha__ident h2 {
   margin: 0;
-  font-size: 1.1rem;
+  font-size: 1rem;
 }
 .planilha__ident p {
   margin: 2px 0 0;
@@ -291,33 +298,24 @@ async function aoSalvar(mensagem) {
 .planilha__totais {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
-  gap: 8px 14px;
+  gap: 8px 16px;
   margin: 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--borda);
 }
 .planilha__totais dt {
-  font-size: 0.75rem;
+  font-size: 0.84rem;
   color: var(--texto-3);
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
 }
 .planilha__totais dd {
   margin: 1px 0 0;
   font-weight: 600;
 }
-.planilha__aviso {
-  margin: 0;
-  padding: 8px 10px;
-  border-radius: var(--raio-p);
-  background: var(--alerta-fundo);
-  color: var(--alerta);
-  border: 1px solid #f0d89a;
-  font-size: 0.9rem;
-}
 .planilha__barra {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
-  align-items: flex-end;
+  gap: 8px;
+  align-items: center;
 }
 .planilha__filtro {
   width: 190px;
@@ -326,6 +324,18 @@ async function aoSalvar(mensagem) {
   flex: 1;
   min-width: 200px;
   max-width: 360px;
+  position: relative;
+}
+.planilha__busca .icone {
+  position: absolute;
+  left: 9px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--texto-3);
+  pointer-events: none;
+}
+.planilha__busca input {
+  padding-left: 32px;
 }
 .planilha__acoes {
   margin-left: auto;
@@ -334,13 +344,11 @@ async function aoSalvar(mensagem) {
   vertical-align: top;
 }
 .planilha__etapa td {
-  background: #eef2f8;
-  font-weight: 700;
+  background: var(--superficie-2);
+  font-weight: 600;
 }
 .planilha__total td {
-  background: #dfe6f1;
-  font-weight: 700;
-  border-top: 2px solid var(--borda-forte);
+  font-weight: 600;
 }
 .planilha__editar {
   padding: 0 4px;

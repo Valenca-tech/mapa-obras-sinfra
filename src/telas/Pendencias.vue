@@ -47,16 +47,18 @@ async function completar(p) {
 
 <template>
   <div>
-    <div class="barra-titulo">
-      <h1>Pendências documentais</h1>
+    <div class="pagina__cabecalho">
+      <div>
+        <h1>Pendências</h1>
+        <p class="pagina__subtitulo">Atos registrados sem o documento completo (número e protocolo).</p>
+      </div>
     </div>
-    <p class="mudo">
-      Atos registrados sem documento completo (número e protocolo). Enquanto estiverem aqui, a obra aparece com o selo
-      "Documento pendente" na ficha, na lista e no relatório.
-    </p>
 
     <p v-if="carregando" class="mudo">Carregando…</p>
-    <div v-else-if="!itens.length" class="cartao">Nenhuma pendência documental. Tudo com lastro.</div>
+    <div v-else-if="!itens.length" class="vazio">
+      <strong>Nenhuma pendência</strong>
+      Todos os atos têm número e protocolo do documento.
+    </div>
     <div v-else class="tabela-rolagem">
       <table class="tabela pendencias">
         <thead>
@@ -72,12 +74,12 @@ async function completar(p) {
         <tbody>
           <tr v-for="p in itens" :key="p.evento_id">
             <td>
-              <button class="btn btn--link pendencias__obra" @click="estado.obraAberta = p.obra_id">{{ p.obra_nome }}</button>
+              <RouterLink :to="{ path: `/obras/${p.obra_id}`, query: { aba: 'historico' } }" class="pendencias__obra">{{ p.obra_nome }}</RouterLink>
             </td>
             <td>{{ rotuloEvento(p.tipo) }}</td>
             <td class="num">{{ data(p.data_evento) }}</td>
             <td class="num">{{ diasEntre(p.data_evento, estado.hoje) }} {{ diasEntre(p.data_evento, estado.hoje) === 1 ? 'dia' : 'dias' }}</td>
-            <td class="pequeno">
+            <td>
               <template v-if="!p.documento_id">Documento inteiro</template>
               <template v-else>
                 {{ [!p.numero && 'número', !p.numero_protocolo && 'protocolo'].filter(Boolean).join(' e ') }}
@@ -102,10 +104,13 @@ async function completar(p) {
 
 <style scoped>
 .pendencias__obra {
-  padding: 0;
-  text-align: left;
-  white-space: normal;
-  min-height: 0;
+  color: var(--texto);
+  font-weight: 500;
+  text-decoration: none;
+}
+.pendencias__obra:hover {
+  color: var(--azul);
+  text-decoration: underline;
 }
 /* Celular: cada pendência vira um bloco, com "Completar" logo abaixo do nome. */
 @media (max-width: 640px) {

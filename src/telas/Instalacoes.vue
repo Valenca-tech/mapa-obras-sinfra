@@ -9,6 +9,7 @@ import { estado, pode, obrasComSituacao, nomeTipoInstalacao, recarregarInstalaco
 import { svgInstalacao } from '../lib/mapa.js';
 import { distanciaAteObra, RAIO_PROXIMIDADE_M } from '../lib/geo.js';
 import { semAcento } from '../lib/texto.js';
+import { Plus, Search } from 'lucide-vue-next';
 import InstalacaoFormulario from '../componentes/InstalacaoFormulario.vue';
 
 const roteador = useRouter();
@@ -45,34 +46,38 @@ const linhas = computed(() => {
     .sort((a, b) => Number(b.ativa) - Number(a.ativa) || a.nome.localeCompare(b.nome, 'pt-BR'));
 });
 
-const verNoMapa = (i) => roteador.push({ path: '/mapa', query: { instalacao: i.id } });
+const verNoMapa = (i) => roteador.push({ path: '/obras', query: { ver: 'mapa', instalacao: i.id } });
 const aoSalvar = () => carregar();
 </script>
 
 <template>
   <div>
-    <div class="barra-titulo">
-      <h1>Instalações públicas</h1>
-      <button v-if="pode('instalacao.editar')" class="btn btn--primario" @click="editando = null">+ Nova instalação</button>
+    <div class="pagina__cabecalho">
+      <div>
+        <h1>Instalações públicas</h1>
+        <p class="pagina__subtitulo">
+          Prédios e espaços do Município. No mapa, cada um mostra as obras vinculadas e as que estão a até {{ RAIO_PROXIMIDADE_M }} m.
+        </p>
+      </div>
+      <button v-if="pode('instalacao.editar')" class="btn btn--primario" @click="editando = null">
+        <Plus class="icone" aria-hidden="true" />Nova instalação
+      </button>
     </div>
-    <p class="mudo inst__intro">
-      Prédios e espaços da Prefeitura que costumam ter relação com a SINFRA. Aparecem no mapa como quadrados azuis; no
-      balão de cada um, as obras vinculadas e as que estão a até {{ RAIO_PROXIMIDADE_M }} m.
-    </p>
 
     <div class="inst__filtros">
-      <label class="campo">
+      <label class="inst__busca">
         <span class="oculto">Buscar</span>
-        <input v-model="busca" type="search" placeholder="Buscar por nome, bairro ou endereço" />
+        <Search class="icone" aria-hidden="true" />
+        <input v-model="busca" class="controle" type="search" placeholder="Buscar por nome, bairro ou endereço" />
       </label>
-      <label class="campo">
+      <label>
         <span class="oculto">Tipo</span>
-        <select v-model="tipo" aria-label="Tipo">
+        <select v-model="tipo" class="controle" aria-label="Tipo">
           <option value="">Todos os tipos</option>
           <option v-for="t in estado.tiposInstalacao" :key="t.codigo" :value="t.codigo">{{ t.nome }}</option>
         </select>
       </label>
-      <label v-if="pode('instalacao.editar')" class="inst__check">
+      <label v-if="pode('instalacao.editar')" class="marcar">
         <input v-model="verInativas" type="checkbox" />
         Mostrar desativadas
       </label>
@@ -92,9 +97,9 @@ const aoSalvar = () => carregar();
         <tbody>
           <tr v-for="i in linhas" :key="i.id" :class="!i.ativa && 'inst__inativa'">
             <td>
-              <strong>{{ i.nome }}</strong>
+              <span class="inst__nome">{{ i.nome }}</span>
               <span v-if="!i.ativa" class="etiqueta etiqueta--alerta" style="margin-left: 6px">Desativada</span>
-              <span class="mudo pequeno inst__end">{{ [i.endereco, i.bairro].filter(Boolean).join(' · ') || 'Sem endereço' }}</span>
+              <span class="inst__end">{{ [i.endereco, i.bairro].filter(Boolean).join(' · ') || 'Sem endereço' }}</span>
             </td>
             <td>
               <span class="inst__tipo">
@@ -102,8 +107,8 @@ const aoSalvar = () => carregar();
                 {{ nomeTipoInstalacao(i.tipo) }}
               </span>
             </td>
-            <td class="direita num">{{ i.vinculadas || '—' }}</td>
-            <td class="direita num">{{ i.proximas || '—' }}</td>
+            <td class="direita num">{{ i.vinculadas || '–' }}</td>
+            <td class="direita num">{{ i.proximas || '–' }}</td>
             <td class="inst__acoes">
               <button v-if="i.ativa" class="btn btn--link" @click="verNoMapa(i)">Ver no mapa</button>
               <button v-if="pode('instalacao.editar')" class="btn btn--link" @click="editando = i">Editar</button>
@@ -119,8 +124,8 @@ const aoSalvar = () => carregar();
       </table>
     </div>
     <p class="pequeno mudo inst__fonte">
-      A carga inicial veio do OpenStreetMap (© colaboradores do OpenStreetMap, licença ODbL), com localização aproximada.
-      Confira cada ponto e corrija pela edição.
+      Carga inicial de bases públicas (INEP, CNES, Censo SUAS, IBGE e © colaboradores do OpenStreetMap, licença ODbL),
+      com localização aproximada. A fonte de cada ponto está na observação; confira e corrija pela edição.
     </p>
 
     <InstalacaoFormulario
@@ -133,35 +138,42 @@ const aoSalvar = () => carregar();
 </template>
 
 <style scoped>
-.inst__intro {
-  margin: -6px 0 14px;
-  max-width: 820px;
-}
 .inst__filtros {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 8px 12px;
   align-items: center;
   margin-bottom: 12px;
 }
-.inst__filtros .campo {
-  flex: 1 1 220px;
-  max-width: 340px;
+.inst__filtros > label {
+  flex: 0 1 260px;
 }
-.inst__check {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 0.88rem;
-  color: var(--texto-2);
-  cursor: pointer;
+.inst__filtros .inst__busca {
+  flex: 1 1 260px;
+  max-width: 380px;
+  position: relative;
 }
-.inst__check input {
-  width: 18px;
-  height: 18px;
+.inst__filtros > .marcar {
+  flex: none;
+}
+.inst__busca .icone {
+  position: absolute;
+  left: 9px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--texto-3);
+  pointer-events: none;
+}
+.inst__busca input {
+  padding-left: 32px;
+}
+.inst__nome {
+  font-weight: 500;
 }
 .inst__end {
   display: block;
+  font-size: 0.86rem;
+  color: var(--texto-3);
 }
 .inst__tipo {
   display: inline-flex;

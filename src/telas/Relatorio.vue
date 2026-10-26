@@ -7,6 +7,7 @@ import { LISTA_SITUACOES, compararParaRelatorio, textoSemAtualizacao } from '../
 import { data, dataHora, pct, reais, pontos } from '../lib/formato.js';
 import { modoDemo } from '../api/index.js';
 import { comprimentoTrecho, formatarExtensao } from '../lib/geo.js';
+import { ArrowLeft } from 'lucide-vue-next';
 
 // O relatório vai para o prefeito: sem dados atualizados agora, não imprime
 // (sairia com a data de hoje e percentuais antigos).
@@ -54,7 +55,7 @@ function observacao(o) {
 <template>
   <div class="relatorio-tela">
     <div class="relatorio-barra nao-imprimir">
-      <RouterLink to="/mapa" class="btn">← Voltar</RouterLink>
+      <RouterLink to="/obras" class="btn"><ArrowLeft class="icone" aria-hidden="true" />Voltar</RouterLink>
       <span class="mudo pequeno">Confira a prévia e use Imprimir (A4 retrato). Para PDF, escolha "Salvar como PDF".</span>
       <button class="btn btn--primario" :disabled="!podeImprimir" @click="imprimir">
         {{ carregando ? 'Atualizando…' : 'Imprimir' }}

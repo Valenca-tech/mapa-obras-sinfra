@@ -15,6 +15,7 @@ import {
 } from '../estado.js';
 import { pct, haDias, lerPercentual, pontos, data } from '../lib/formato.js';
 import { semAcento } from '../lib/texto.js';
+import { TriangleAlert, Search } from 'lucide-vue-next';
 import SeloSituacao from '../componentes/SeloSituacao.vue';
 import Modal from '../componentes/Modal.vue';
 
@@ -193,21 +194,22 @@ async function gravar() {
 
 <template>
   <div class="atualizar">
-    <div class="barra-titulo">
-      <h1>Atualizar percentual</h1>
+    <div class="pagina__cabecalho">
+      <div>
+        <h1>Lançamentos</h1>
+        <p class="pagina__subtitulo">Informe o novo percentual das obras visitadas e salve. As outras ficam como estão.</p>
+      </div>
     </div>
-    <p class="mudo pequeno atualizar__dica">
-      Digite o novo percentual das obras que você visitou e toque em <strong>Salvar</strong>. As outras ficam como estão.
-    </p>
 
     <div class="atualizar__ferramentas">
-      <label class="campo">
+      <label class="atualizar__busca">
         <span class="oculto">Buscar</span>
-        <input v-model="busca" type="search" placeholder="Buscar obra ou bairro" />
+        <Search class="icone" aria-hidden="true" />
+        <input v-model="busca" class="controle" type="search" placeholder="Buscar obra ou bairro" />
       </label>
-      <label class="campo">
+      <label>
         <span class="oculto">Ordenar</span>
-        <select v-model="ordenacao">
+        <select v-model="ordenacao" class="controle">
           <option value="atualizacao">Mais tempo sem atualizar</option>
           <option value="nome">Nome</option>
           <option value="bairro">Bairro</option>
@@ -216,19 +218,21 @@ async function gravar() {
     </div>
 
     <ul class="atualizar__lista">
-      <li v-for="o in obras" :key="o.id" :class="['cartao', 'item', (novos[o.id]?.valor || novos[o.id]?.obs) && 'item--alterado']">
+      <li v-for="o in obras" :key="o.id" :class="['item', (novos[o.id]?.valor || novos[o.id]?.obs) && 'item--alterado']">
         <div class="item__topo">
-          <button class="item__nome" @click="estado.obraAberta = o.id">
+          <RouterLink :to="`/obras/${o.id}`" class="item__nome">
             <strong>{{ o.nome }}</strong>
-            <span class="mudo pequeno">{{ o.bairro }}</span>
-          </button>
+            <span>{{ o.bairro }}</span>
+          </RouterLink>
           <SeloSituacao :situacao="o.situacao" />
         </div>
 
         <div class="item__info pequeno">
           <span>Atual: <strong class="num">{{ pct(o.percentual_executado) }}</strong></span>
           <span>Prazo: <span class="num">{{ pct(o.situacao.prazoDecorrido) }}</span></span>
-          <span v-if="o.situacao.alertaSemAtualizacao" class="etiqueta etiqueta--alerta">⚠ sem atualização {{ haDias(o.situacao.diasSemAtualizacao) }}</span>
+          <span v-if="o.situacao.alertaSemAtualizacao" class="item__alerta">
+            <TriangleAlert class="icone" aria-hidden="true" />sem atualização {{ haDias(o.situacao.diasSemAtualizacao) }}
+          </span>
           <span v-else class="mudo">{{ o.ultima_atualizacao_em ? `Atualizada ${haDias(o.situacao.diasDesdeLancamento)}` : 'Nunca atualizada' }}</span>
         </div>
         <p v-if="o.paralisada" class="item__paralisada pequeno">Paralisada desde {{ data(o.paralisada_desde) }}</p>
@@ -253,7 +257,7 @@ async function gravar() {
             class="btn btn--link item__obs-botao"
             @click="entrada(o.id).comObs = true"
           >
-            + observação
+            Adicionar observação
           </button>
           <template v-if="pode('obra.paralisar')">
             <button v-if="o.paralisada" type="button" class="btn item__paralisar" @click="abrirAcao('retomar', o)">Retomar</button>
@@ -283,7 +287,7 @@ async function gravar() {
           <button type="button" class="btn btn--link" @click="repetirAtual(o)">Repetir {{ pct(o.percentual_executado) }}</button>
         </p>
       </li>
-      <li v-if="!obras.length" class="mudo">Nenhuma obra encontrada.</li>
+      <li v-if="!obras.length" class="item mudo">Nenhuma obra encontrada.</li>
     </ul>
 
     <div class="atualizar__salvar">
@@ -313,34 +317,47 @@ async function gravar() {
 
 <style scoped>
 .atualizar {
-  max-width: 720px;
+  max-width: 760px;
   margin: 0 auto;
-  padding-bottom: 90px;
-}
-.atualizar__dica {
-  margin: -8px 0 12px;
 }
 .atualizar__ferramentas {
   display: grid;
-  grid-template-columns: 1fr 200px;
+  grid-template-columns: 1fr 220px;
   gap: 8px;
   margin-bottom: 12px;
+}
+.atualizar__busca {
+  position: relative;
+}
+.atualizar__busca .icone {
+  position: absolute;
+  left: 9px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--texto-3);
+  pointer-events: none;
+}
+.atualizar__busca input {
+  padding-left: 32px;
 }
 .atualizar__lista {
   list-style: none;
   margin: 0;
   padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+  background: var(--superficie);
+  border: 1px solid var(--borda);
+  border-radius: var(--raio);
 }
 .item {
-  padding: 12px 14px;
-  border-left: 4px solid transparent;
+  padding: 14px 16px;
+  box-shadow: inset 3px 0 0 transparent;
+}
+.item + .item {
+  border-top: 1px solid var(--borda);
 }
 .item--alterado {
-  border-left-color: var(--azul);
-  background: #fbfcff;
+  box-shadow: inset 3px 0 0 var(--azul);
+  background: #fafbfe;
 }
 .item__topo {
   display: flex;
@@ -349,15 +366,18 @@ async function gravar() {
   gap: 10px;
 }
 .item__nome {
-  border: none;
-  background: none;
-  padding: 0;
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-  color: var(--texto);
   display: flex;
   flex-direction: column;
+  color: var(--texto);
+  text-decoration: none;
+  min-width: 0;
+}
+.item__nome strong {
+  font-weight: 500;
+}
+.item__nome span {
+  font-size: 0.86rem;
+  color: var(--texto-3);
 }
 .item__nome:hover strong {
   color: var(--azul);
@@ -366,14 +386,24 @@ async function gravar() {
 .item__info {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px 14px;
+  gap: 4px 16px;
   align-items: center;
   margin-top: 6px;
   color: var(--texto-2);
 }
+.item__alerta {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--alerta);
+}
+.item__alerta .icone {
+  width: 14px;
+  height: 14px;
+}
 .item__paralisada {
   margin: 6px 0 0;
-  color: #8a3a00;
+  color: var(--s-paralisada);
 }
 .item__entrada {
   display: flex;
@@ -382,25 +412,24 @@ async function gravar() {
   margin-top: 10px;
 }
 .item__entrada .campo {
-  width: 130px;
+  width: 120px;
   flex-shrink: 0;
 }
 .item__entrada input {
-  font-size: 1.35rem;
-  min-height: 52px;
+  font-size: 1.2rem;
+  min-height: 44px;
   text-align: center;
   font-variant-numeric: tabular-nums;
 }
 .item__obs-botao {
-  min-height: 52px;
+  min-height: 44px;
 }
 .item__paralisar {
   margin-left: auto;
-  min-height: 44px;
 }
 .item__erro {
   margin: 4px 0 0;
-  color: var(--s-atrasada);
+  color: var(--erro);
 }
 .item__aviso {
   margin: 4px 0 0;
@@ -412,16 +441,15 @@ async function gravar() {
 .item__obs {
   margin-top: 8px;
 }
+/* Barra de salvar presa ao pé da tela, dentro da área de conteúdo. */
 .atualizar__salvar {
-  position: fixed;
-  left: 0;
-  right: 0;
+  position: sticky;
   bottom: 0;
   z-index: 900;
-  padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
+  margin: 12px -24px -40px;
+  padding: 10px 24px calc(10px + env(safe-area-inset-bottom));
   background: rgba(255, 255, 255, 0.97);
   border-top: 1px solid var(--borda);
-  box-shadow: 0 -4px 14px rgba(16, 24, 40, 0.08);
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -429,17 +457,24 @@ async function gravar() {
 }
 .atualizar__salvar > * {
   width: 100%;
-  max-width: 720px;
+  max-width: 760px;
 }
 .reducoes {
   padding-left: 18px;
+}
+@media (max-width: 640px) {
+  .atualizar__salvar {
+    margin: 12px -14px -32px;
+    padding-left: 14px;
+    padding-right: 14px;
+  }
 }
 @media (max-width: 480px) {
   .atualizar__ferramentas {
     grid-template-columns: 1fr;
   }
   .item__entrada .campo {
-    width: 110px;
+    width: 104px;
   }
 }
 @media print {
