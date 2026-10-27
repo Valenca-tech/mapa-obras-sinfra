@@ -10,7 +10,7 @@ const mostrar = ref({ ifma: true, concretta: true });
       <img v-if="mostrar.ifma" :src="'marcas/ifma.png'" alt="IFMA" @error="mostrar.ifma = false" />
       <img v-if="mostrar.concretta" :src="'marcas/concretta.png'" alt="Concretta Jr" @error="mostrar.concretta = false" />
     </span>
-    <span>Piloto desenvolvido pelo IFMA Campus Imperatriz (LAEST e Concretta Jr)</span>
+    <span>Piloto desenvolvido pelo IFMA Campus Imperatriz e pela Concretta Jr</span>
   </footer>
 </template>
 

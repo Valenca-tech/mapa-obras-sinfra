@@ -11,6 +11,7 @@ import { telaInicial, marcarCapaVista } from '../rotas.js';
 const rota = useRoute();
 const roteador = useRouter();
 const temPlaca = ref(true);
+const mostrar = ref({ ifma: true, concretta: true });
 
 // Imagens em public/capa/ (telas da demonstração, dados fictícios).
 const TELAS = [
@@ -99,7 +100,11 @@ function iniciar() {
         <line x1="800" y1="150" x2="560" y2="330" />
         <line x1="800" y1="760" x2="640" y2="900" class="capa__linha-forte" />
       </svg>
-      <span class="capa__sinfra" aria-hidden="true">SINFRA</span>
+      <div class="capa__parceiros">
+        <span>Desenvolvimento</span>
+        <img v-if="mostrar.ifma" class="capa__ifma" :src="'marcas/ifma.png'" alt="IFMA Campus Imperatriz" @error="mostrar.ifma = false" />
+        <img v-if="mostrar.concretta" class="capa__concretta" :src="'marcas/concretta.png'" alt="Concretta Jr" @error="mostrar.concretta = false" />
+      </div>
 
       <div class="capa__vitrine">
         <div class="capa__janela" aria-hidden="true">
@@ -130,16 +135,18 @@ function iniciar() {
       <button type="button" class="capa__iniciar" @click="iniciar">
         Iniciar <ArrowRight class="icone" aria-hidden="true" />
       </button>
-      <p class="capa__credito">Piloto IFMA Campus Imperatriz · LAEST e Concretta Jr</p>
     </section>
   </div>
 </template>
 
 <style scoped>
 .capa {
-  --capa-azul: #0b1f44;
-  --capa-azul-2: #12306b;
-  --capa-claro: #3fa3ec;
+  /* cores da marca da Prefeitura de Imperatriz */
+  --capa-azul: #1e388c;
+  --capa-azul-2: #2b4cae;
+  --capa-azul-3: #142866;
+  --capa-claro: #fcb813;
+  --capa-verde: #00a650;
   position: relative;
   min-height: 100dvh;
   display: grid;
@@ -155,7 +162,7 @@ function iniciar() {
   flex-direction: column;
   padding: 6vh 6vw 5vh;
   color: #fff;
-  background: linear-gradient(160deg, var(--capa-azul-2) 0%, var(--capa-azul) 55%, #081734 100%);
+  background: linear-gradient(160deg, var(--capa-azul-2) 0%, var(--capa-azul) 55%, var(--capa-azul-3) 100%);
   /* corte diagonal, como no modelo */
   clip-path: polygon(0 0, 100% 0, 78% 100%, 0 100%);
   margin-right: -12%;
@@ -169,7 +176,7 @@ function iniciar() {
 }
 .capa__linhas line,
 .capa__linhas polyline {
-  stroke: rgba(63, 163, 236, 0.45);
+  stroke: rgba(252, 184, 19, 0.4);
   stroke-width: 1.2;
   fill: none;
   vector-effect: non-scaling-stroke;
@@ -199,7 +206,7 @@ function iniciar() {
   font-weight: 600;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: #8fc8f5;
+  color: #ffd76a;
   line-height: 1.6;
 }
 .capa__texto {
@@ -233,12 +240,12 @@ function iniciar() {
 }
 .capa__faixa i {
   width: 52px;
-  height: 3px;
-  background: var(--capa-claro);
+  height: 4px;
+  background: linear-gradient(90deg, var(--capa-claro) 50%, var(--capa-verde) 50%);
   flex-shrink: 0;
 }
 .capa__faixa b {
-  color: var(--capa-claro);
+  color: var(--capa-verde);
 }
 .capa__descricao {
   margin: 0;
@@ -298,16 +305,36 @@ function iniciar() {
   padding: 6vh 4vw 5vh 8vw;
 }
 .capa__linhas--clara line {
-  stroke: rgba(63, 163, 236, 0.55);
+  stroke: rgba(0, 166, 80, 0.45);
 }
-.capa__sinfra {
+.capa__linhas--clara .capa__linha-forte {
+  stroke: var(--capa-verde) !important;
+}
+.capa__parceiros {
   position: absolute;
   top: 5vh;
   right: 4vw;
-  font-family: 'Archivo Black', 'Arial Black', Arial, sans-serif;
-  font-size: 1.5rem;
-  color: var(--capa-azul);
-  letter-spacing: 0.02em;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.capa__parceiros span {
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #5b6b82;
+}
+.capa__parceiros img {
+  height: 44px;
+  width: auto;
+  border-radius: 6px;
+}
+.capa__ifma {
+  padding: 6px 10px;
+  background: #fff;
+  box-sizing: content-box;
+  height: 32px !important;
 }
 .capa__vitrine {
   width: 100%;
@@ -320,8 +347,8 @@ function iniciar() {
   overflow: hidden;
   background: #fff;
   box-shadow:
-    0 30px 60px -20px rgba(11, 31, 68, 0.45),
-    0 0 0 1px rgba(11, 31, 68, 0.08);
+    0 30px 60px -20px rgba(20, 40, 102, 0.45),
+    0 0 0 1px rgba(20, 40, 102, 0.08);
   transform: perspective(1400px) rotateY(-8deg) rotateX(3deg);
   transform-origin: center;
 }
@@ -394,7 +421,7 @@ function iniciar() {
 }
 .capa__pontos button.ativo {
   width: 28px;
-  background: var(--capa-claro);
+  background: var(--capa-verde);
 }
 .capa__iniciar {
   position: absolute;
@@ -406,7 +433,7 @@ function iniciar() {
   padding: 16px 64px;
   border: none;
   border-radius: 8px;
-  background: linear-gradient(180deg, #17346f, var(--capa-azul));
+  background: linear-gradient(180deg, var(--capa-azul-2), var(--capa-azul));
   color: #fff;
   font: inherit;
   font-size: 1.1rem;
@@ -415,10 +442,10 @@ function iniciar() {
   box-shadow:
     0 0 0 4px #eef1f6,
     0 0 0 6px var(--capa-claro),
-    0 14px 30px -10px rgba(11, 31, 68, 0.6);
+    0 14px 30px -10px rgba(20, 40, 102, 0.6);
 }
 .capa__iniciar:hover {
-  background: linear-gradient(180deg, #1d3f86, #10295a);
+  background: linear-gradient(180deg, #3358c2, var(--capa-azul-3));
 }
 .capa__iniciar:focus-visible {
   outline: 3px solid var(--capa-azul);
@@ -427,14 +454,6 @@ function iniciar() {
 .capa__iniciar .icone {
   width: 20px;
   height: 20px;
-}
-.capa__credito {
-  position: absolute;
-  left: 8vw;
-  bottom: 2vh;
-  margin: 0;
-  font-size: 0.78rem;
-  color: #7a879a;
 }
 .troca-enter-active,
 .troca-leave-active {
@@ -474,10 +493,18 @@ function iniciar() {
     display: none;
   }
   .capa__clara {
-    padding: 28px 22px 120px;
+    padding: 28px 22px 32px;
   }
-  .capa__sinfra {
-    display: none;
+  .capa__parceiros {
+    position: static;
+    order: 3;
+    flex-wrap: wrap;
+    justify-content: center;
+    margin-top: 24px;
+  }
+  .capa__parceiros span {
+    flex-basis: 100%;
+    text-align: center;
   }
   .capa__janela {
     transform: none;
@@ -486,14 +513,11 @@ function iniciar() {
     margin-top: 24px;
   }
   .capa__iniciar {
-    left: 22px;
-    right: 22px;
-    bottom: 44px;
+    position: static;
+    order: 2;
+    align-self: stretch;
+    margin-top: 28px;
     justify-content: center;
-  }
-  .capa__credito {
-    left: 22px;
-    bottom: 14px;
   }
 }
 @media (max-width: 520px) {
