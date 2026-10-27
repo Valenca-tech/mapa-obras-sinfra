@@ -6,8 +6,9 @@ import { ref, computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import {
   ChevronRight, Ellipsis, MapPin, Pencil, CalendarClock, Pause, Play, Archive, ArchiveRestore, FilePlus2,
-  TriangleAlert, FileWarning,
+  TriangleAlert, FileWarning, Ruler,
 } from 'lucide-vue-next';
+import { urlMedicoes } from '../lib/medicaoPro.js';
 import { estado, pode, abrirAcao, nomeTipo, nomeTipoInstalacao, instalacaoPorId } from '../estado.js';
 import { modoDemo } from '../api/index.js';
 import { usarObra } from '../lib/usarObra.js';
@@ -61,6 +62,11 @@ const desvio = computed(() => {
   if (!s || s.codigo === 'concluida' || s.codigo === 'nao_iniciada' || !s.desvio) return '';
   return s.desvio > 0 ? `execução ${pontos(s.desvio)} pontos abaixo` : `execução ${pontos(-s.desvio)} pontos à frente`;
 });
+const endereco = computed(() => {
+  const o = obra.value;
+  if (!o?.logradouro) return '';
+  return `${o.logradouro}, ${o.numero_endereco || 's/n'}${o.bairro ? ` · ${o.bairro}` : ''}`;
+});
 const instalacao = computed(() => instalacaoPorId(obra.value?.instalacao_id));
 const fiscal = computed(() =>
   obra.value ? [obra.value.fiscal_responsavel, obra.value.fiscal_titulo, obra.value.fiscal_registro].filter(Boolean).join(', ') : '',
@@ -100,6 +106,16 @@ const fiscal = computed(() =>
           <button v-if="ativa && pode('percentual.lancar')" type="button" class="btn btn--primario" @click="abrirAcao('lancar', obra)">
             Lançar percentual
           </button>
+          <a
+            v-if="obra.medicao_pro_id"
+            :href="urlMedicoes(obra.medicao_pro_id)"
+            target="_blank"
+            rel="noopener"
+            class="btn"
+            title="Abre as medições desta obra no Medição Pro (nova aba)"
+          >
+            <Ruler class="icone" aria-hidden="true" />Medições
+          </a>
           <button v-if="pode('documento.gerar')" type="button" class="btn" @click="emitindo = true">
             <FilePlus2 class="icone" aria-hidden="true" />Emitir documento
           </button>
@@ -234,6 +250,17 @@ const fiscal = computed(() =>
                 <div><dt>Início</dt><dd class="num">{{ data(obra.data_inicio) }}</dd></div>
                 <div><dt>Término previsto</dt><dd class="num">{{ data(obra.data_termino_prevista) }}</dd></div>
                 <div class="largo"><dt>Fiscal</dt><dd>{{ fiscal || '–' }}</dd></div>
+                <div v-if="endereco" class="largo"><dt>Endereço</dt><dd>{{ endereco }}</dd></div>
+                <div class="largo">
+                  <dt>Medição Pro</dt>
+                  <dd>
+                    <a v-if="obra.medicao_pro_id" :href="urlMedicoes(obra.medicao_pro_id)" target="_blank" rel="noopener">Abrir as medições desta obra</a>
+                    <template v-else>
+                      Não vinculada.
+                      <RouterLink v-if="ativa && pode('obra.editar')" :to="`/obras/${obra.id}/editar`">Vincular em Editar dados da obra</RouterLink>
+                    </template>
+                  </dd>
+                </div>
                 <div v-if="trecho"><dt>Trecho de via</dt><dd>{{ trecho }}</dd></div>
                 <div v-if="obra.instalacao_id" class="largo">
                   <dt>Instalação atendida</dt>

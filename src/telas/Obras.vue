@@ -3,17 +3,17 @@
 // Lista e Mapa (?ver=mapa). A vista escolhida fica guardada no aparelho.
 import { ref, computed, onMounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { List, Map as IconeMapa, Plus, SlidersHorizontal } from 'lucide-vue-next';
+import { LayoutGrid, Map as IconeMapa, Plus, SlidersHorizontal } from 'lucide-vue-next';
 import { estado, pode, recarregarObras, avisar, obrasFiltradas, filtroAtivo } from '../estado.js';
+import { reais, reaisCompacto } from '../lib/formato.js';
+import Filtros from '../componentes/Filtros.vue';
+import ResumoSituacao from '../componentes/ResumoSituacao.vue';
+import CartoesObras from '../componentes/CartoesObras.vue';
+import MapaObras from '../componentes/MapaObras.vue';
 
 // No celular a busca, o tipo e o bairro ficam atrás do botão "Filtros".
 const filtrosAbertos = ref(false);
 const filtrosLigados = computed(() => [estado.filtros.busca.trim(), estado.filtros.tipo, estado.filtros.bairro].filter(Boolean).length);
-import { reais, reaisCompacto } from '../lib/formato.js';
-import Filtros from '../componentes/Filtros.vue';
-import ResumoSituacao from '../componentes/ResumoSituacao.vue';
-import TabelaObras from '../componentes/TabelaObras.vue';
-import MapaObras from '../componentes/MapaObras.vue';
 
 const CHAVE_VISTA = 'mapa-obras-vista';
 const rota = useRoute();
@@ -61,7 +61,7 @@ onMounted(() => recarregarObras().catch((e) => avisar(e.message, 'erro')));
         <div class="acoes">
           <div class="segmentado" role="group" aria-label="Forma de ver as obras">
             <button type="button" :aria-pressed="vista === 'lista'" @click="trocarVista('lista')">
-              <List class="icone" aria-hidden="true" />Lista
+              <LayoutGrid class="icone" aria-hidden="true" />Cartões
             </button>
             <button type="button" :aria-pressed="vista === 'mapa'" @click="trocarVista('mapa')">
               <IconeMapa class="icone" aria-hidden="true" />Mapa
@@ -80,7 +80,7 @@ onMounted(() => recarregarObras().catch((e) => avisar(e.message, 'erro')));
     </div>
 
     <div v-if="vista === 'lista'" class="obras__lista">
-      <TabelaObras />
+      <CartoesObras />
     </div>
     <MapaObras v-else class="obras__mapa" />
   </div>

@@ -1,13 +1,16 @@
 <script setup>
-// Relatório A4 para o prefeito: todas as obras ativas, atrasadas no topo.
-// Ignora os filtros da tela: é sempre o retrato completo.
+// Relatório A4 de situação das obras, em formato de documento oficial (papel
+// timbrado, seções numeradas, tabelas de borda simples, local, data e
+// assinatura do secretário). Ignora os filtros da tela: é sempre o retrato completo.
 import { ref, computed, onMounted } from 'vue';
 import { estado, obrasComSituacao, recarregarObras, totais, nomeTipo } from '../estado.js';
 import { LISTA_SITUACOES, compararParaRelatorio, textoSemAtualizacao } from '../lib/situacao.js';
 import { data, dataHora, pct, reais, pontos } from '../lib/formato.js';
 import { modoDemo } from '../api/index.js';
 import { comprimentoTrecho, formatarExtensao } from '../lib/geo.js';
-import { ArrowLeft } from 'lucide-vue-next';
+import { ArrowLeft, Printer } from 'lucide-vue-next';
+import { dataPorExtenso, reaisPorExtenso } from '../lib/extenso.js';
+import { numeroBr } from '../lib/documentos/conteudo.js';
 
 // O relatório vai para o prefeito: sem dados atualizados agora, não imprime
 // (sairia com a data de hoje e percentuais antigos).
@@ -39,6 +42,24 @@ const imprimir = () => podeImprimir.value && window.print();
 // treino em produção também conta), não só pelo modo.
 const temFicticias = computed(() => modoDemo || obras.value.some((o) => o.demo));
 
+const orgao = computed(() => estado.config.orgao_nome || 'Secretaria Municipal de Infraestrutura e Serviços Públicos');
+const sigla = computed(() => estado.config.orgao_sigla || 'SINFRA');
+const valorPor = (codigo) => obrasComSituacao.value.filter((o) => o.situacao.codigo === codigo).reduce((s, o) => s + Number(o.valor_contrato || 0), 0);
+const execucaoMedia = computed(() => {
+  const com = obrasComSituacao.value.filter((o) => Number(o.valor_contrato) > 0);
+  const v = com.reduce((s, o) => s + Number(o.valor_contrato), 0);
+  return v ? com.reduce((s, o) => s + o.situacao.executado * Number(o.valor_contrato), 0) / v : 0;
+});
+// "2 atrasadas, 1 paralisada, 5 em dia e 1 concluída"
+const frase = computed(() => {
+  const partes = LISTA_SITUACOES.filter((s) => t.value[s.codigo]).map((s) => {
+    const n = t.value[s.codigo];
+    const nome = s.rotulo.toLowerCase();
+    return `${n} ${n > 1 && !nome.endsWith('dia') ? `${nome}s` : nome}`;
+  });
+  return partes.length > 1 ? `${partes.slice(0, -1).join(', ')} e ${partes.at(-1)}` : (partes[0] ?? '');
+});
+
 function observacao(o) {
   const s = o.situacao;
   const partes = [];
@@ -55,10 +76,10 @@ function observacao(o) {
 <template>
   <div class="relatorio-tela">
     <div class="relatorio-barra nao-imprimir">
-      <RouterLink to="/obras" class="btn"><ArrowLeft class="icone" aria-hidden="true" />Voltar</RouterLink>
-      <span class="mudo pequeno">Confira a prévia e use Imprimir (A4 retrato). Para PDF, escolha "Salvar como PDF".</span>
+      <RouterLink to="/painel" class="btn"><ArrowLeft class="icone" aria-hidden="true" />Voltar</RouterLink>
+      <span class="mudo pequeno">Prévia em A4. Use Imprimir; para PDF, escolha "Salvar como PDF".</span>
       <button class="btn btn--primario" :disabled="!podeImprimir" @click="imprimir">
-        {{ carregando ? 'Atualizando…' : 'Imprimir' }}
+        <Printer class="icone" aria-hidden="true" />{{ carregando ? 'Atualizando…' : 'Imprimir' }}
       </button>
     </div>
     <div v-if="erro" class="relatorio-erro nao-imprimir" role="alert">
@@ -68,65 +89,110 @@ function observacao(o) {
 
     <!-- sem dados atualizados, nada sai no papel (nem pelo Ctrl+P) -->
     <article :class="['folha', !podeImprimir && 'folha--sem-impressao']">
-      <header class="folha__topo">
-        <img :src="'marcas/prefeitura.png'" alt="Prefeitura de Imperatriz" class="folha__placa" @error="(e) => (e.target.style.display = 'none')" />
-        <div class="folha__titulo">
-          <p class="folha__orgao">Prefeitura Municipal de Imperatriz · Secretaria Municipal de Infraestrutura e Serviços Públicos</p>
-          <h1>SINFRA: Obras ativas em {{ data(estado.hoje) }}</h1>
-        </div>
-        <p v-if="temFicticias" class="folha__demo">{{ modoDemo ? 'DADOS FICTÍCIOS DE DEMONSTRAÇÃO' : 'CONTÉM OBRAS FICTÍCIAS (TREINO)' }}</p>
+      <p v-if="temFicticias" class="folha__demo">{{ modoDemo ? 'DADOS FICTÍCIOS DE DEMONSTRAÇÃO' : 'CONTÉM OBRAS FICTÍCIAS (TREINO)' }}</p>
+
+      <header class="folha__timbre">
+        <img :src="'marcas/brasao_imperatriz.png'" alt="Brasão do Município de Imperatriz" @error="(e) => (e.target.style.display = 'none')" />
+        <p>ESTADO DO MARANHÃO</p>
+        <p>PREFEITURA MUNICIPAL DE IMPERATRIZ</p>
+        <p>{{ orgao.toUpperCase() }}</p>
       </header>
 
-      <section class="folha__totais">
-        <div><strong>{{ t.ativas }}</strong><span>obras ativas</span></div>
-        <div v-for="s in LISTA_SITUACOES" :key="s.codigo" :style="{ '--cor': s.hex }">
-          <strong>{{ t[s.codigo] ?? 0 }}</strong><span>{{ s.rotulo.toLowerCase() }}</span>
-        </div>
-        <div class="folha__valor"><strong>{{ reais(t.valor) }}</strong><span>valor contratado</span></div>
-      </section>
+      <h1 class="folha__titulo">RELATÓRIO DE SITUAÇÃO DAS OBRAS</h1>
+      <p class="folha__posicao">Posição em {{ dataPorExtenso(estado.hoje) }}</p>
 
+      <h2>1. RESUMO</h2>
+      <p class="folha__texto">
+        Na data deste relatório, a {{ sigla }} acompanha <strong>{{ t.ativas }} {{ t.ativas === 1 ? 'obra ativa' : 'obras ativas' }}</strong>,
+        com valor contratado total de <strong>{{ reais(t.valor) }}</strong> ({{ reaisPorExtenso(t.valor) }}).
+        <template v-if="t.ativas">
+          Por situação: {{ frase }}. A execução média, ponderada pelo valor dos contratos, é de {{ pct(execucaoMedia) }}.
+        </template>
+        <template v-if="t.alertas">{{ ' ' }}{{ t.alertas }} {{ t.alertas === 1 ? 'obra está' : 'obras estão' }} sem lançamento da fiscalização há mais de {{ estado.config.dias_sem_atualizacao_alerta }} dias.</template>
+        <template v-if="t.pendencias">{{ ' ' }}{{ t.pendencias }} {{ t.pendencias === 1 ? 'obra tem' : 'obras têm' }} ato registrado sem documento completo.</template>
+      </p>
+
+      <table class="folha__tabela folha__tabela--resumo">
+        <thead>
+          <tr>
+            <th>Situação</th>
+            <th class="direita">Obras</th>
+            <th class="direita">Valor contratado (R$)</th>
+            <th class="direita">% do valor</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="s in LISTA_SITUACOES" :key="s.codigo">
+            <td>{{ s.rotulo }}</td>
+            <td class="direita num">{{ t[s.codigo] ?? 0 }}</td>
+            <td class="direita num">{{ numeroBr(valorPor(s.codigo), 2, 2) }}</td>
+            <td class="direita num">{{ t.valor ? numeroBr((valorPor(s.codigo) / t.valor) * 100, 1, 1) : '0,0' }}%</td>
+          </tr>
+        </tbody>
+        <tfoot>
+          <tr>
+            <td>Total</td>
+            <td class="direita num">{{ t.ativas }}</td>
+            <td class="direita num">{{ numeroBr(t.valor, 2, 2) }}</td>
+            <td class="direita num">100,0%</td>
+          </tr>
+        </tfoot>
+      </table>
+
+      <h2>2. OBRAS ATIVAS</h2>
+      <p class="folha__nota">Em ordem de prioridade: atrasadas (maior desvio primeiro), paralisadas, em dia, não iniciadas e concluídas.</p>
       <table class="folha__tabela">
         <thead>
           <tr>
+            <th class="folha__n">Nº</th>
             <th>Obra</th>
             <th>Situação</th>
             <th class="direita">Exec.</th>
             <th class="direita">Prazo</th>
             <th>Término</th>
-            <th class="direita">Valor</th>
+            <th class="direita">Valor (R$)</th>
           </tr>
         </thead>
         <tbody>
-          <tr v-for="o in obras" :key="o.id" :class="`linha--${o.situacao.codigo}`">
+          <tr v-for="(o, i) in obras" :key="o.id">
+            <td class="folha__n num">{{ i + 1 }}</td>
             <td>
-              <strong>{{ o.nome }}</strong>
-              <span v-if="o.demo && !modoDemo" class="folha__ficticia">FICTÍCIA</span>
-              <span class="folha__sub">{{ nomeTipo(o.tipo) }} · {{ o.bairro }}<template v-if="o.trecho"> · trecho de {{ formatarExtensao(comprimentoTrecho(o.trecho)) }}</template><template v-if="o.empresa"> · {{ o.empresa }}</template></span>
+              <strong>{{ o.nome }}</strong><template v-if="o.demo && !modoDemo"> (fictícia)</template>
+              <span class="folha__sub">
+                {{ nomeTipo(o.tipo) }} · {{ o.bairro || 'sem bairro' }}<template v-if="o.trecho"> · trecho de {{ formatarExtensao(comprimentoTrecho(o.trecho)) }}</template><template v-if="o.numero_contrato"> · Contrato {{ o.numero_contrato }}</template><template v-if="o.empresa"> · {{ o.empresa }}</template>
+              </span>
               <span v-if="observacao(o)" class="folha__obs">{{ observacao(o) }}</span>
             </td>
-            <td class="folha__situacao" :style="{ '--cor': o.situacao.hex, '--tx': o.situacao.texto }">
-              <span>{{ o.situacao.simbolo }}</span> {{ o.situacao.rotulo }}
-            </td>
+            <td class="folha__situacao">{{ o.situacao.rotulo }}</td>
             <td class="direita num">{{ pct(o.situacao.executado) }}</td>
             <td class="direita num">{{ pct(o.situacao.prazoDecorrido) }}</td>
             <td class="num">{{ data(o.data_termino_prevista) }}</td>
-            <td class="direita num">{{ reais(o.valor_contrato) || '—' }}</td>
+            <td class="direita num">{{ o.valor_contrato ? numeroBr(o.valor_contrato, 2, 2) : '–' }}</td>
           </tr>
           <tr v-if="!obras.length">
-            <td colspan="6">Nenhuma obra ativa.</td>
+            <td colspan="7">Nenhuma obra ativa.</td>
           </tr>
         </tbody>
       </table>
 
+      <h2>3. CRITÉRIOS</h2>
+      <p class="folha__texto">
+        A situação é calculada pelo sistema, nunca digitada. A obra é considerada atrasada quando o prazo venceu sem
+        conclusão ou quando o percentual executado está mais de {{ pontos(estado.config.tolerancia_atraso_pontos) }} pontos
+        abaixo do prazo decorrido, medido de forma linear entre o início e o término vigente. Os percentuais executados são
+        os do último lançamento da fiscalização de cada obra.
+      </p>
+
+      <p class="folha__fecho">Imperatriz-MA, {{ dataPorExtenso(estado.hoje) }}.</p>
+      <div class="folha__assinatura">
+        <span class="folha__linha"></span>
+        <strong>{{ estado.config.secretario_nome || 'Secretário(a)' }}</strong>
+        <span>{{ estado.config.secretario_cargo }}</span>
+      </div>
+
       <footer class="folha__rodape">
-        <p>
-          <strong>Critério:</strong> atrasada quando o prazo venceu sem conclusão ou quando o executado está mais de
-          {{ pontos(estado.config.tolerancia_atraso_pontos) }} pontos abaixo do prazo decorrido (proporção linear entre início e término vigente).
-          Situação calculada automaticamente; não é digitada.
-        </p>
-        <p>
-          Gerado em {{ gerado }} por {{ estado.perfil?.nome }} · Mapa de Obras SINFRA · Piloto desenvolvido pelo IFMA Campus Imperatriz
-        </p>
+        <span>{{ orgao.toUpperCase() }}<template v-if="estado.config.orgao_endereco"> · {{ estado.config.orgao_endereco }}</template><template v-if="estado.config.prefeitura_cnpj"> · CNPJ {{ estado.config.prefeitura_cnpj }}</template></span>
+        <span>Emitido em {{ gerado }} por {{ estado.perfil?.nome }} · Mapa de Obras SINFRA</span>
       </footer>
     </article>
   </div>
@@ -134,7 +200,7 @@ function observacao(o) {
 
 <style scoped>
 .relatorio-tela {
-  background: #e9ecf1;
+  background: #e6e8ec;
   min-height: 100dvh;
   padding: 0 0 32px;
 }
@@ -151,86 +217,88 @@ function observacao(o) {
   border-bottom: 1px solid var(--borda);
 }
 .folha {
+  position: relative;
   background: #fff;
   width: 210mm;
   min-height: 297mm;
   margin: 20px auto;
-  padding: 12mm 12mm 10mm;
-  box-shadow: var(--sombra-alta);
-  color: #111;
-  font-size: 9pt;
-  line-height: 1.3;
-}
-.folha__topo {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 10px;
-  border-bottom: 2.5pt solid var(--azul);
-  padding-bottom: 3mm;
-  margin-bottom: 4mm;
-}
-.folha__orgao {
-  margin: 0 0 1mm;
-  font-size: 8pt;
-  color: #444;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-}
-.folha h1 {
-  margin: 0;
-  font-size: 15pt;
-  color: var(--azul-escuro);
+  padding: 15mm 15mm 14mm 25mm;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.18);
+  color: #000;
+  font-size: 10pt;
+  line-height: 1.4;
 }
 .folha__demo {
+  position: absolute;
+  top: 8mm;
+  right: 15mm;
   margin: 0;
-  font-size: 7.5pt;
-  font-weight: 700;
-  color: #7a5a00;
-  border: 1pt solid var(--dourado);
-  padding: 1mm 2mm;
-  white-space: nowrap;
-}
-.folha__totais {
-  display: flex;
-  gap: 2mm;
-  margin-bottom: 4mm;
-}
-.folha__totais > div {
-  flex: 1;
-  border: 0.75pt solid #c8ced8;
-  border-top: 2.5pt solid var(--cor, var(--azul));
-  padding: 1.5mm 2mm;
-  display: flex;
-  flex-direction: column;
-}
-.folha__totais strong {
-  font-size: 12pt;
-}
-.folha__totais span {
   font-size: 7pt;
-  color: #555;
+  font-weight: 600;
+  border: 0.75pt solid #000;
+  padding: 0.5mm 2mm;
 }
-.folha__valor {
-  flex: 1.6 !important;
-  --cor: var(--dourado);
+.folha__timbre {
+  text-align: center;
+  margin-bottom: 7mm;
+}
+.folha__timbre img {
+  display: block;
+  height: 18mm;
+  width: auto;
+  margin: 0 auto 2mm;
+}
+.folha__timbre p {
+  margin: 0;
+  font-size: 9.5pt;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+.folha__titulo {
+  margin: 0;
+  text-align: center;
+  font-size: 12.5pt;
+  font-weight: 700;
+  color: #000;
+}
+.folha__posicao {
+  margin: 1mm 0 7mm;
+  text-align: center;
+  font-size: 10pt;
+}
+.folha h2 {
+  margin: 6mm 0 2.5mm;
+  font-size: 10pt;
+  font-weight: 700;
+  color: #000;
+}
+.folha__texto {
+  margin: 0 0 3mm;
+  text-align: justify;
+  text-indent: 12mm;
+}
+.folha__nota {
+  margin: 0 0 2mm;
+  font-size: 8.5pt;
 }
 .folha__tabela {
   width: 100%;
   border-collapse: collapse;
+  font-size: 8.5pt;
+}
+.folha__tabela th,
+.folha__tabela td {
+  border: 0.6pt solid #000;
+  padding: 1.2mm 1.6mm;
+  vertical-align: top;
+  text-align: left;
 }
 .folha__tabela th {
-  text-align: left;
-  font-size: 7.5pt;
-  text-transform: uppercase;
-  color: #444;
-  border-bottom: 1pt solid #333;
-  padding: 1.2mm 1.5mm;
+  font-weight: 700;
+  background: #efefef;
 }
-.folha__tabela td {
-  padding: 1.5mm;
-  border-bottom: 0.5pt solid #d0d5dd;
-  vertical-align: top;
+.folha__tabela tfoot td {
+  font-weight: 700;
 }
 .folha__tabela tr {
   page-break-inside: avoid;
@@ -239,23 +307,51 @@ function observacao(o) {
 .folha__tabela .direita {
   text-align: right;
 }
+.folha__tabela--resumo {
+  width: 70%;
+}
+.folha__n {
+  width: 7mm;
+  text-align: center !important;
+}
 .folha__sub,
 .folha__obs {
   display: block;
   font-size: 7.5pt;
-  color: #555;
 }
 .folha__obs {
-  color: #8e1c1c;
+  font-style: italic;
 }
-.folha__ficticia {
-  display: inline-block;
-  margin-left: 1.5mm;
-  font-size: 6.5pt;
-  font-weight: 700;
-  color: #7a5a00;
-  border: 0.75pt solid var(--dourado);
-  padding: 0 1mm;
+.folha__situacao {
+  white-space: nowrap;
+}
+.folha__fecho {
+  margin: 10mm 0 16mm;
+  text-align: right;
+}
+.folha__assinatura {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  break-inside: avoid;
+}
+.folha__linha {
+  width: 75mm;
+  border-top: 0.75pt solid #000;
+  margin-bottom: 1.5mm;
+}
+.folha__assinatura span:last-child {
+  font-size: 9pt;
+}
+.folha__rodape {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5mm;
+  margin-top: 12mm;
+  padding-top: 2mm;
+  border-top: 0.6pt solid #000;
+  font-size: 7pt;
 }
 .relatorio-erro {
   display: flex;
@@ -267,42 +363,9 @@ function observacao(o) {
   max-width: 210mm;
   padding: 10px 12px;
   background: var(--erro-fundo);
-  border: 1px solid #f1bcbc;
-  color: #8e1c1c;
-  border-radius: var(--raio-p);
-}
-.linha--em_dia .folha__obs,
-.linha--concluida .folha__obs,
-.linha--nao_iniciada .folha__obs {
-  color: #555;
-}
-.folha__situacao {
-  white-space: nowrap;
-  font-weight: 700;
-  color: var(--tx);
-}
-.folha__situacao span {
-  display: inline-block;
-  min-width: 3.5mm;
-  color: var(--cor);
-}
-.folha__placa {
-  height: 13mm;
-  width: auto;
-  flex-shrink: 0;
-}
-.folha__titulo {
-  flex: 1;
-}
-.folha__rodape {
-  margin-top: 5mm;
-  padding-top: 2mm;
-  border-top: 0.75pt solid #c8ced8;
-  font-size: 7pt;
-  color: #555;
-}
-.folha__rodape p {
-  margin: 0 0 1mm;
+  border: 1px solid var(--erro-borda);
+  color: var(--erro);
+  border-radius: var(--raio);
 }
 
 /* Só na tela (no papel A4 a folha cabe inteira): celular e janela estreita. */
@@ -312,14 +375,10 @@ function observacao(o) {
     min-height: 0;
     margin: 12px;
     padding: 16px;
-    font-size: 10pt;
     overflow-x: auto;
   }
-  .folha__totais {
-    flex-wrap: wrap;
-  }
-  .folha__totais > div {
-    flex-basis: 30%;
+  .folha__tabela--resumo {
+    width: 100%;
   }
   .relatorio-barra {
     flex-wrap: wrap;
@@ -342,6 +401,10 @@ function observacao(o) {
     padding: 0;
     box-shadow: none;
   }
+  .folha__demo {
+    top: 0;
+    right: 0;
+  }
 }
 </style>
 
@@ -349,7 +412,7 @@ function observacao(o) {
 @media print {
   @page {
     size: A4 portrait;
-    margin: 12mm 12mm 12mm 12mm;
+    margin: 15mm 15mm 14mm 25mm;
   }
   .nao-imprimir,
   .cabecalho,

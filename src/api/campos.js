@@ -5,7 +5,7 @@
 
 /** Colunas da obra que o formulário de edição pode alterar (UPDATE direto). */
 export const CAMPOS_OBRA_EDITAVEIS = [
-  'nome', 'tipo', 'bairro', 'empresa', 'empresa_cnpj', 'numero_processo', 'numero_contrato', 'valor_contrato',
+  'nome', 'tipo', 'bairro', 'logradouro', 'numero_endereco', 'medicao_pro_id', 'empresa', 'empresa_cnpj', 'numero_processo', 'numero_contrato', 'valor_contrato',
   'data_inicio', 'data_termino_prevista', 'latitude', 'longitude', 'trecho', 'instalacao_id',
   'fiscal_responsavel', 'fiscal_titulo', 'fiscal_registro', 'fiscal_matricula',
 ];

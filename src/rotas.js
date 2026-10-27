@@ -2,7 +2,9 @@ import { watch } from 'vue';
 import { createRouter, createWebHashHistory } from 'vue-router';
 import { estado, pode, sair } from './estado.js';
 
+import Capa from './telas/Capa.vue';
 import Entrar from './telas/Entrar.vue';
+import Painel from './telas/Painel.vue';
 import Obras from './telas/Obras.vue';
 import Obra from './telas/Obra.vue';
 import Atualizar from './telas/Atualizar.vue';
@@ -13,14 +15,16 @@ import Auditoria from './telas/Auditoria.vue';
 import Pendencias from './telas/Pendencias.vue';
 import Instalacoes from './telas/Instalacoes.vue';
 
-/** Tela inicial: o fiscal cai direto em Lançamentos (se puder lançar). */
+/** Tela inicial: o fiscal cai direto em Lançamentos (se puder lançar); os demais, no Painel. */
 export const telaInicial = () =>
-  estado.perfil?.papel === 'fiscal' && pode('percentual.lancar') ? '/lancamentos' : '/obras';
+  estado.perfil?.papel === 'fiscal' && pode('percentual.lancar') ? '/lancamentos' : '/painel';
 
 const routes = [
   { path: '/', redirect: () => telaInicial() },
+  { path: '/capa', component: Capa, meta: { publica: true, limpa: true } },
   { path: '/entrar', component: Entrar, meta: { publica: true, limpa: true } },
-  // Obras: lista e mapa na mesma tela (?ver=mapa), com os mesmos filtros.
+  { path: '/painel', component: Painel },
+  // Obras: cartões e mapa na mesma tela (?ver=mapa), com os mesmos filtros.
   { path: '/obras', component: Obras, meta: { cheia: true } },
   { path: '/obras/nova', component: ObraFormulario, meta: { permissao: 'obra.cadastrar' } },
   { path: '/obras/:id/editar', component: ObraFormulario, props: true, meta: { permissao: 'obra.editar' } },
@@ -47,13 +51,39 @@ export const rotas = createRouter({
   scrollBehavior: (para, de, salva) => salva ?? (para.path !== de.path ? { top: 0 } : false),
 });
 
+// Capa de entrada: aparece uma vez por visita (aba aberta), ao chegar pelo
+// endereço da ferramenta; depois de "Iniciar" segue para onde ia.
+const CHAVE_CAPA = 'mapa-obras-capa-vista';
+let primeiraNavegacao = true;
+function capaJaVista() {
+  try {
+    return sessionStorage.getItem(CHAVE_CAPA) === '1';
+  } catch {
+    return false;
+  }
+}
+export function marcarCapaVista() {
+  try {
+    sessionStorage.setItem(CHAVE_CAPA, '1');
+  } catch {
+    /* sem storage: a capa volta na próxima visita, sem problema */
+  }
+}
+
 rotas.beforeEach((para) => {
+  if (primeiraNavegacao) {
+    primeiraNavegacao = false;
+    if (para.path !== '/capa' && para.path !== '/relatorio' && !capaJaVista()) {
+      return { path: '/capa', query: para.fullPath && para.fullPath !== '/' ? { depois: para.fullPath } : {} };
+    }
+  }
+  if (para.path === '/capa') return true;
   if (para.path === '/entrar' && estado.saindo) return true;
   if (!para.meta.publica && !estado.sessao) return '/entrar';
   if (para.path === '/entrar' && estado.sessao) return telaInicial();
   if (para.meta.permissao && !pode(para.meta.permissao)) {
     const inicial = telaInicial();
-    return para.path === inicial ? '/obras' : inicial; // nunca redireciona para si mesma
+    return para.path === inicial ? '/painel' : inicial; // nunca redireciona para si mesma
   }
   return true;
 });

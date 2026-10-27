@@ -5,7 +5,7 @@
 import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue';
 import { useRoute } from 'vue-router';
 import {
-  Building2, ClipboardCheck, FileWarning, Landmark, Printer, Settings, History, LogOut, PanelLeftClose,
+  LayoutDashboard, Building2, ClipboardCheck, FileWarning, Landmark, Printer, Settings, History, LogOut, PanelLeftClose,
   PanelLeftOpen, Menu, X, RotateCcw,
 } from 'lucide-vue-next';
 import { estado, pode, ROTULO_PAPEL, reiniciarDemonstracao } from '../estado.js';
@@ -28,6 +28,7 @@ const pendencias = computed(() => estado.obras.reduce((s, o) => s + Number(o.pen
 
 const principais = computed(() =>
   [
+    { para: '/painel', rotulo: 'Painel', icone: LayoutDashboard },
     { para: '/obras', rotulo: 'Obras', icone: Building2 },
     { para: '/lancamentos', rotulo: 'Lançamentos', icone: ClipboardCheck, permissao: 'percentual.lancar' },
     { para: '/pendencias', rotulo: 'Pendências', icone: FileWarning, contador: pendencias.value },

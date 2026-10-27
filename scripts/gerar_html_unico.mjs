@@ -55,6 +55,12 @@ for (const nome of readdirSync(pastaMarcas).filter((n) => n.endsWith('.png'))) {
   const dataUri = `data:image/png;base64,${readFileSync(join(pastaMarcas, nome)).toString('base64')}`;
   js = js.split(`marcas/${nome}`).join(dataUri);
 }
+// Telas da capa de entrada (public/capa/*.jpg), pelo mesmo motivo.
+const pastaCapa = join(raiz, 'public', 'capa');
+for (const nome of readdirSync(pastaCapa).filter((n) => n.endsWith('.jpg'))) {
+  const dataUri = `data:image/jpeg;base64,${readFileSync(join(pastaCapa, nome)).toString('base64')}`;
+  js = js.split(`capa/${nome}`).join(dataUri);
+}
 
 // Sem config.js: modo demonstração fixo
 html = html.replace(/<script src="\.\/config\.js"><\/script>/, `<script>window.CONFIG = { modo: 'demo' };</script>`);

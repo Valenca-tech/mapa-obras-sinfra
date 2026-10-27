@@ -152,6 +152,11 @@ create table public.obras (
   -- instalação pública atendida pela obra (reforma de escola, praça...)
   instalacao_id          uuid references public.instalacoes (id),
   empresa_cnpj           text,
+  -- endereço do ponto (preenchido ao marcar no mapa, editável)
+  logradouro             text,
+  numero_endereco        text,
+  -- código da obra no Medição Pro (medicaopro.concretta.org), para abrir as medições
+  medicao_pro_id         text,
   fiscal_responsavel     text,
   -- para a assinatura do fiscal nas declarações (ex.: 'Engenheiro Civil', 'CREA-MA 1234567')
   fiscal_titulo          text,
@@ -840,7 +845,7 @@ $$;
 -- 8.7 Ações expostas ao frontend (RPC).
 
 -- p_dados: {id (opcional, gerado no navegador), nome, tipo, bairro, empresa,
---           empresa_cnpj, numero_processo, numero_contrato, valor_contrato, data_inicio,
+--           empresa_cnpj, logradouro, numero_endereco, medicao_pro_id, numero_processo, numero_contrato, valor_contrato, data_inicio,
 --           data_termino_prevista, latitude, longitude, trecho (GeoJSON,
 --           opcional), instalacao_id (opcional), fiscal_responsavel,
 --           fiscal_titulo, fiscal_registro, fiscal_matricula}
@@ -884,7 +889,7 @@ begin
     raise exception 'O percentual inicial deve estar entre 0 e 100.' using errcode = 'P0001';
   end if;
 
-  insert into obras (id, nome, tipo, bairro, empresa, empresa_cnpj, numero_processo, numero_contrato,
+  insert into obras (id, nome, tipo, bairro, logradouro, numero_endereco, medicao_pro_id, empresa, empresa_cnpj, numero_processo, numero_contrato,
                      valor_contrato, data_inicio, data_termino_prevista, latitude,
                      longitude, trecho, instalacao_id, fiscal_responsavel, fiscal_titulo,
                      fiscal_registro, fiscal_matricula, criado_por)
@@ -892,6 +897,9 @@ begin
           btrim(p_dados ->> 'nome'),
           coalesce(nullif(p_dados ->> 'tipo', ''), 'outro'),
           nullif(btrim(p_dados ->> 'bairro'), ''),
+          nullif(btrim(p_dados ->> 'logradouro'), ''),
+          nullif(btrim(p_dados ->> 'numero_endereco'), ''),
+          nullif(btrim(p_dados ->> 'medicao_pro_id'), ''),
           nullif(btrim(p_dados ->> 'empresa'), ''),
           nullif(btrim(p_dados ->> 'empresa_cnpj'), ''),
           nullif(btrim(p_dados ->> 'numero_processo'), ''),
@@ -1352,7 +1360,7 @@ grant select on public.papeis, public.permissoes, public.papel_permissoes,
   to authenticated;
 
 -- Escrita direta, coluna por coluna. O resto só pelas funções da seção 8.7.
-grant update (nome, tipo, bairro, empresa, empresa_cnpj, numero_processo, numero_contrato, valor_contrato,
+grant update (nome, tipo, bairro, logradouro, numero_endereco, medicao_pro_id, empresa, empresa_cnpj, numero_processo, numero_contrato, valor_contrato,
               data_inicio, data_termino_prevista, latitude, longitude, trecho, instalacao_id,
               fiscal_responsavel, fiscal_titulo, fiscal_registro, fiscal_matricula)
   on public.obras to authenticated;

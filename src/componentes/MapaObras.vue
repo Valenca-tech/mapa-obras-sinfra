@@ -1,7 +1,7 @@
 <script setup>
 // Vista em mapa da tela Obras. Clicar numa obra seleciona (?obra=id) e abre a
 // prévia à direita; a página completa da obra fica a um clique ("Abrir obra").
-import { ref, onMounted, onBeforeUnmount, watch } from 'vue';
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import L from 'leaflet';
 import {
@@ -19,6 +19,10 @@ import PreviaObra from './PreviaObra.vue';
 
 // Traço da linha do trecho, além da cor: paralisada tracejada, não iniciada pontilhada.
 const TRACO = { paralisada: '12 9', nao_iniciada: '1 9' };
+
+// Sem a lista, usa as obras dos filtros da tela Obras; o painel passa todas.
+const props = defineProps({ obras: { type: Array, default: null } });
+const lista = computed(() => props.obras ?? obrasFiltradas.value);
 const LARGURA_PREVIA = 360;
 
 const rota = useRoute();
@@ -37,7 +41,7 @@ function desenharObras() {
   if (!mapa) return;
   camadaObras.clearLayers();
   desenhos.clear();
-  for (const o of obrasFiltradas.value) {
+  for (const o of lista.value) {
     const s = o.situacao;
     const selecionada = o.id === estado.obraAberta;
     const extensao = o.trecho ? formatarExtensao(comprimentoTrecho(o.trecho)) : '';
@@ -246,7 +250,7 @@ onBeforeUnmount(() => {
   mapa = null; // as guardas "if (!mapa)" passam a valer para o que chegar depois
 });
 
-watch(obrasFiltradas, desenharObras);
+watch(lista, desenharObras);
 watch(instalacoesVisiveis, desenharInstalacoes);
 watch(
   () => rota.query.instalacao,
@@ -269,7 +273,7 @@ watch(
   <div class="mapa-obras">
     <div ref="el" class="mapa-obras__leaflet" role="region" aria-label="Mapa das obras de Imperatriz"></div>
     <CamadaInstalacoes class="mapa-obras__camada" />
-    <p v-if="!obrasFiltradas.length" class="mapa-obras__vazio">Nenhuma obra com estes filtros.</p>
+    <p v-if="!lista.length" class="mapa-obras__vazio">Nenhuma obra com estes filtros.</p>
     <PreviaObra v-if="estado.obraAberta" :key="estado.obraAberta" :id="estado.obraAberta" class="mapa-obras__previa" />
   </div>
 </template>

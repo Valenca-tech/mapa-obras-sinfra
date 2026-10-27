@@ -12,6 +12,8 @@ import {
 } from '../estado.js';
 import { lerNumero, lerPercentual, erroDeData, data as fmtData, reais } from '../lib/formato.js';
 import { distanciaMetros, formatarExtensao } from '../lib/geo.js';
+import { enderecoDoPonto } from '../lib/endereco.js';
+import { codigoMedicaoPro, MEDICAO_PRO } from '../lib/medicaoPro.js';
 import SeletorLocal from '../componentes/SeletorLocal.vue';
 import { ChevronRight } from 'lucide-vue-next';
 import DocumentoCampos from '../componentes/DocumentoCampos.vue';
@@ -28,7 +30,7 @@ const BAIRROS_CONHECIDOS = [
 const sugestoesBairro = computed(() => [...new Set([...bairros.value, ...BAIRROS_CONHECIDOS])].sort((a, b) => a.localeCompare(b, 'pt-BR')));
 
 const f = ref({
-  nome: '', tipo: '', bairro: '', empresa: '', numero_processo: '', numero_contrato: '', valor: '',
+  nome: '', tipo: '', bairro: '', logradouro: '', numero_endereco: '', medicao_pro_id: '', empresa: '', numero_processo: '', numero_contrato: '', valor: '',
   data_inicio: '', data_termino_prevista: '', fiscal_responsavel: '',
   empresa_cnpj: '', fiscal_titulo: '', fiscal_registro: '', fiscal_matricula: '',
 });
@@ -67,6 +69,7 @@ onMounted(async () => {
   original.value = o;
   f.value = {
     nome: o.nome, tipo: o.tipo, bairro: o.bairro ?? '', empresa: o.empresa ?? '',
+    logradouro: o.logradouro ?? '', numero_endereco: o.numero_endereco ?? '', medicao_pro_id: o.medicao_pro_id ?? '',
     numero_processo: o.numero_processo ?? '', numero_contrato: o.numero_contrato ?? '',
     valor: o.valor_contrato != null ? String(o.valor_contrato).replace('.', ',') : '',
     data_inicio: o.data_inicio, data_termino_prevista: o.data_termino_prevista,
@@ -119,6 +122,9 @@ function dados() {
     nome: v.nome.trim(),
     tipo: v.tipo,
     bairro: v.bairro.trim() || null,
+    logradouro: v.logradouro.trim() || null,
+    numero_endereco: v.numero_endereco.trim() || null,
+    medicao_pro_id: codigoMedicaoPro(v.medicao_pro_id) || null,
     empresa: v.empresa.trim() || null,
     numero_processo: v.numero_processo.trim() || null,
     numero_contrato: v.numero_contrato.trim() || null,
@@ -196,6 +202,52 @@ watch(local, (v) => {
   }
 });
 
+// Endereço automático: ao marcar (ou arrastar) o ponto, consulta o
+// OpenStreetMap e preenche logradouro, número e bairro. Campo que a pessoa
+// digitou não é trocado; só o vazio ou o que veio da consulta anterior.
+const buscandoEndereco = ref(false);
+const enderecoAvisado = ref('');
+let ultimoAuto = { logradouro: '', numero_endereco: '', bairro: '' };
+let consulta = null;
+let atraso = null;
+let pontoCarregado = null; // ponto da obra ao abrir a edição: não consulta só por abrir
+watch(local, (v) => {
+  if (v?.latitude == null) return;
+  const chave = `${v.latitude},${v.longitude}`;
+  if (pontoCarregado === null && editando.value) {
+    pontoCarregado = chave;
+    return;
+  }
+  if (chave === pontoCarregado) return;
+  clearTimeout(atraso);
+  atraso = setTimeout(() => preencherEndereco(v.latitude, v.longitude), 700);
+});
+async function preencherEndereco(lat, lon) {
+  consulta?.abort();
+  consulta = new AbortController();
+  buscandoEndereco.value = true;
+  enderecoAvisado.value = '';
+  const achado = await enderecoDoPonto(lat, lon, { signal: consulta.signal });
+  buscandoEndereco.value = false;
+  if (!achado) {
+    enderecoAvisado.value = 'Não foi possível buscar o endereço deste ponto. Preencha à mão.';
+    return;
+  }
+  const novo = { logradouro: achado.logradouro, numero_endereco: achado.numero, bairro: achado.bairro };
+  for (const campo of Object.keys(novo)) {
+    const atual = f.value[campo].trim();
+    if (novo[campo] && (!atual || atual === ultimoAuto[campo])) f.value[campo] = novo[campo];
+  }
+  ultimoAuto = novo;
+  enderecoAvisado.value = achado.numero
+    ? 'Endereço do OpenStreetMap: confira.'
+    : 'Endereço do OpenStreetMap, sem número para este ponto: complete se souber.';
+}
+onBeforeUnmount(() => {
+  clearTimeout(atraso);
+  consulta?.abort();
+});
+
 // Aditivo ou arquivamento feitos a partir desta tela: atualiza o que está na tela.
 watch(
   () => estado.versao,
@@ -259,13 +311,6 @@ const marcarSujo = () => (sujo.value = true);
             </select>
             <small v-if="erros.tipo" class="erro-campo">{{ erros.tipo }}</small>
           </label>
-          <label class="campo">
-            <span>Bairro</span>
-            <input v-model="f.bairro" type="text" list="lista-bairros" />
-            <datalist id="lista-bairros">
-              <option v-for="b in sugestoesBairro" :key="b" :value="b" />
-            </datalist>
-          </label>
         </div>
       </section>
 
@@ -302,6 +347,17 @@ const marcarSujo = () => (sujo.value = true);
           <label class="campo">
             <span>CNPJ da empresa</span>
             <input v-model="f.empresa_cnpj" type="text" maxlength="30" placeholder="00.000.000/0000-00" />
+          </label>
+          <label :class="['campo', 'largo', f.medicao_pro_id.trim() && !codigoMedicaoPro(f.medicao_pro_id) && 'campo--erro']">
+            <span>Obra no Medição Pro</span>
+            <input v-model="f.medicao_pro_id" type="text" maxlength="300" placeholder="Cole o endereço da obra aberta no Medição Pro ou o código dela" />
+            <small v-if="f.medicao_pro_id.trim() && !codigoMedicaoPro(f.medicao_pro_id)" class="erro-campo">
+              Não reconheci o código. Abra a obra no Medição Pro e copie o endereço da barra do navegador.
+            </small>
+            <small v-else class="ajuda">
+              Liga esta obra às medições dela no <a :href="MEDICAO_PRO" target="_blank" rel="noopener">Medição Pro</a>.
+              <template v-if="codigoMedicaoPro(f.medicao_pro_id)"> Código: {{ codigoMedicaoPro(f.medicao_pro_id) }}.</template>
+            </small>
           </label>
           <label class="campo">
             <span>Nº do processo administrativo</span>
@@ -364,6 +420,28 @@ const marcarSujo = () => (sujo.value = true);
         />
         <small v-if="erros.local" class="erro-campo" style="color: var(--s-atrasada)">{{ erros.local }}</small>
 
+        <div class="grade form-obra__endereco">
+          <label class="campo">
+            <span>Logradouro</span>
+            <input v-model="f.logradouro" type="text" maxlength="200" placeholder="Preenchido ao marcar o ponto" />
+          </label>
+          <label class="campo form-obra__numero">
+            <span>Número</span>
+            <input v-model="f.numero_endereco" type="text" maxlength="20" placeholder="s/n" />
+          </label>
+          <label class="campo">
+            <span>Bairro</span>
+            <input v-model="f.bairro" type="text" list="lista-bairros" />
+            <datalist id="lista-bairros">
+              <option v-for="b in sugestoesBairro" :key="b" :value="b" />
+            </datalist>
+          </label>
+        </div>
+        <p class="pequeno mudo form-obra__aviso-endereco" aria-live="polite">
+          <template v-if="buscandoEndereco">Buscando o endereço do ponto…</template>
+          <template v-else>{{ enderecoAvisado }}</template>
+        </p>
+
         <label class="campo form-obra__instalacao">
           <span>Instalação pública atendida <small class="mudo">(opcional)</small></span>
           <select v-model="instalacaoId" @change="marcarSujo">
@@ -422,6 +500,22 @@ const marcarSujo = () => (sujo.value = true);
 }
 .form-obra__cartao > .caixa-erro {
   margin: 0 24px 16px;
+}
+.form-obra__endereco {
+  margin-top: 14px;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 0.7fr) minmax(0, 1.3fr);
+}
+.form-obra__aviso-endereco {
+  margin: 6px 0 0;
+  min-height: 1.2em;
+}
+@media (max-width: 640px) {
+  .form-obra__endereco {
+    grid-template-columns: 1fr 100px;
+  }
+  .form-obra__endereco .campo:last-child {
+    grid-column: 1 / -1;
+  }
 }
 .form-obra__instalacao {
   margin-top: 14px;

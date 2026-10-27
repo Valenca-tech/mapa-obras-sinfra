@@ -4,9 +4,14 @@ Ferramenta web para a Secretaria Municipal de Infraestrutura e Serviços Públic
 
 ## Navegação
 
-- **Menu lateral:** Obras, Lançamentos, Pendências (com o número de pendentes), Instalações públicas, Relatório e, para o secretário, Configuração e Auditoria. Recolhe para só os ícones (botão no pé do menu); abaixo de 960 px de largura vira gaveta, aberta pelo botão da barra de cima.
-- **Obras:** uma tela com duas vistas, **Lista** e **Mapa**, e os mesmos filtros (busca, tipo, bairro) e a mesma faixa de situação, que conta e filtra (Atrasada, Paralisada, Em dia...; Sem atualização; Documento pendente). A vista escolhida fica guardada no aparelho. No mapa, clicar numa obra abre uma prévia com o essencial e o botão "Abrir obra".
+- **Capa:** ao abrir o endereço, uma capa de entrada (marca, números e telas da ferramenta em carrossel) com o botão "Iniciar"; aparece uma vez por visita.
+- **Painel** (tela inicial do secretário e do gabinete): carteira de obras (ativas, atrasadas, paralisadas, execução média ponderada pelo valor, documentos pendentes), o mapa numa janela que minimiza e maximiza, obras por situação e as listas do que pede atenção (atrasadas e paralisadas, término nos próximos 30 dias, sem atualização, documentos pendentes). O fiscal continua caindo em Lançamentos.
+- **Menu lateral:** Painel, Obras, Lançamentos, Pendências (com o número de pendentes), Instalações públicas, Relatório e, para o secretário, Configuração e Auditoria. Recolhe para só os ícones (botão no pé do menu); abaixo de 960 px de largura vira gaveta, aberta pelo botão da barra de cima.
+- **Obras:** uma tela com duas vistas, **Cartões** (um cartão por obra, com situação, executado x prazo, valor, término e último lançamento; ordenação escolhida) e **Mapa**, e os mesmos filtros (busca, tipo, bairro) e a mesma faixa de situação, que conta e filtra (Atrasada, Paralisada, Em dia...; Sem atualização; Documento pendente). A vista escolhida fica guardada no aparelho. No mapa, clicar numa obra abre uma prévia com o essencial e o botão "Abrir obra".
 - **Página da obra** (`/obras/<id>`): cabeçalho com situação, tipo, bairro e contrato; ações sempre à vista (Lançar percentual, Emitir documento e "Mais": ver no mapa, editar, aditivo, paralisar ou retomar, arquivar); quadro com executado, prazo decorrido, valor, término e último lançamento; abas Visão geral, Serviços e etapas, Documentos e Histórico.
+- **Endereço automático:** no cadastro, ao marcar ou arrastar o ponto, logradouro, número e bairro são preenchidos pelo Nominatim do OpenStreetMap (só a coordenada vai na consulta; o número muitas vezes não existe no OSM). Campo digitado pela pessoa não é trocado.
+- **Medição Pro** (medicaopro.concretta.org): cada obra pode guardar o código dela no Medição Pro (cola-se o endereço da obra aberta lá); a página da obra ganha o botão "Medições", que abre as medições no Medição Pro, com o login de lá.
+- **Relatório:** documento oficial em A4 (papel timbrado com brasão, seções numeradas, tabelas de borda simples, texto de resumo com valores por extenso, critérios, local, data e assinatura do secretário).
 - Endereços antigos (`#/mapa`, `#/central`, `#/lista`, `#/atualizar`) levam para as telas novas.
 
 Piloto desenvolvido pelo IFMA Campus Imperatriz (LAEST e Concretta Jr). Responsável: Prof. Luan Henrique Varão Silva.
